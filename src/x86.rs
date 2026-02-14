@@ -112,6 +112,39 @@ pub fn lidt(gdt: *const [GateDesc; 256], size: usize) {
     }
 }
 
+pub fn noop() {
+    core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
+}
+
+// x86.rs
+pub unsafe fn insl(port: u16, addr: *mut u32, cnt: usize) {
+    core::arch::asm!(
+        "cld",
+        "rep insd",
+        in("dx") port,
+        inout("edi") (addr as usize) => _,
+        inout("ecx") cnt => _,
+        options(nostack, preserves_flags),
+    );
+}
+
+
+
+pub unsafe fn outsl(port: u16, addr: *const u32, cnt: usize) {
+    let mut p = addr;
+    for _ in 0..cnt {
+        let val = core::ptr::read(p);
+        asm!(
+            "out dx, eax",
+            in("dx") port,
+            in("eax") val,
+            options(nomem, nostack, preserves_flags),
+        );
+        p = p.add(1);
+    }
+}
+
+
 /// Halts the CPU until the next interrupt occurs.
 /// The `hlt` instruction:
 /// 1. Stops instruction execution and places the processor in a HALT state
