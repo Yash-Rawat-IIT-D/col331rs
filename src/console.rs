@@ -13,7 +13,7 @@ impl Write for Console {
 
 const BACKSPACE: char = '\x08';
 
-fn consputc(c: char) {
+pub fn consputc(c: char) {
     if c == BACKSPACE {
         uartputc(BACKSPACE);
         uartputc(' ');
