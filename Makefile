@@ -69,6 +69,12 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
+mkfs: src/mkfs.rs
+	rustc -W warnings -o mkfs src/mkfs.rs
+
+fs.img: mkfs *.txt
+	./mkfs fs.img *.txt
+
 bootblock: bootasm.S bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
@@ -88,6 +94,7 @@ kernel: kernel.a $(OBJS) ./linkers/kernel.ld
 vectors.S: vectors.pl
 	./vectors.pl > vectors.S
 
+
 # $(LD) $(LDFLAGS) -T kernel.ld -o kernel entry.o kernel.a -b binary
 # ld -m    elf_i386 -T kernel.ld -o kernel entry.o kernel.a -b binary
 # Prevent deletion of intermediate files, e.g. cat.o, after first build, so
@@ -100,7 +107,7 @@ vectors.S: vectors.pl
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img .gdbinit vectors.S
+	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img mkfs .gdbinit vectors.S
 	rm -r target
 
 # run in emulators
