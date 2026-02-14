@@ -14,6 +14,7 @@ pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
 pub const IRQ_ERROR: u32 = 19;
 pub const IRQ_SPURIOUS: u32 = 31;
+const LOG_TICKS: bool = false;
 
 extern "C" {
     static vectors: [usize; 256]; // remove assembly. 
@@ -96,7 +97,7 @@ pub fn tvinit() {
             0                       // Descriptor privilege level.
         );
     }
-    IDT.idt.set(arr);
+    let _ = IDT.idt.set(arr);
 }
 
 pub fn idtinit() {
@@ -116,11 +117,12 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 	const TIMER: u32 = T_IRQ0 + IRQ_TIMER;
 	const SPURIOUS: u32 = T_IRQ0 + IRQ_SPURIOUS;
 	const SEVEN: u32 = T_IRQ0 + 7;
-	
     match tf.trapno {
 		TIMER => {
             *IDT.ticks.borrow_mut() += 1;
-            println!("Tick {}!", IDT.ticks.borrow());
+            if LOG_TICKS {
+                println!("Tick {}!", IDT.ticks.borrow());
+            }
 			lapic::lapiceoi();
 		}
 		SEVEN | SPURIOUS => {
@@ -132,6 +134,11 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 			);
             lapiceoi();
 		}
+        crate::constants::IDE_TRAP => {
+            crate::ide::ideintr();
+            crate::lapic::lapiceoi();
+        }
+
 		_ => {
 			println!(
 				"unexpected trap {} from cpu {} eip {} (cr2=0x{:x})\n",
