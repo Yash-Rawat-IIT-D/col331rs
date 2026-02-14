@@ -75,6 +75,12 @@ mkfs: src/mkfs.rs
 fs.img: mkfs *.txt
 	./mkfs fs.img *.txt
 
+mkfs: src/mkfs.rs
+	rustc -W warnings -o mkfs src/mkfs.rs
+
+fs.img: mkfs *.txt
+	./mkfs fs.img *.txt
+
 bootblock: bootasm.S bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
