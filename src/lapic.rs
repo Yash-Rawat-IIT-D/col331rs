@@ -1,6 +1,6 @@
 use core::ptr::{read_volatile, write_volatile};
 use crate::mp::MP_ONCE;
-use crate::traps::{T_IRQ0, IRQ_TIMER, IRQ_SPURIOUS, IRQ_ERROR};
+use crate::constants::{T_IRQ0, IRQ_TIMER, IRQ_ERROR, IRQ_SPURIOUS};
 
 const ID: isize = 0x0020 / 4;
 const VER: isize = 0x0030 / 4;

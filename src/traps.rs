@@ -3,17 +3,9 @@ use core::cell::{OnceCell, RefCell};
 use crate::proc::cpuid;
 use crate::println;
 use crate::lapic::lapiceoi;
-use crate::x86::{lidt,rcr2};
+use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
-
-const SEG_KCODE: u16 = 1;
-const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
-const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
-
-pub const T_IRQ0: u32 = 32;
-pub const IRQ_TIMER: u32 = 0;
-pub const IRQ_ERROR: u32 = 19;
-pub const IRQ_SPURIOUS: u32 = 31;
+use crate::constants::{SEG_KCODE, STS_IG32, STS_TG32, T_IRQ0, IRQ_TIMER, IRQ_ERROR, IRQ_SPURIOUS};
 
 extern "C" {
     static vectors: [usize; 256]; // remove assembly. 
@@ -52,38 +44,15 @@ impl GateDesc {
 #[repr(C)]
 pub struct IDTOnce {
     pub idt: OnceCell<[GateDesc; 256]>,
-    pub ticks: RefCell<u32>
 }  
 unsafe impl Sync for IDTOnce {}
-pub static IDT: IDTOnce = IDTOnce { idt: OnceCell::new(),  ticks: RefCell::new(0) };
+pub static IDT: IDTOnce = IDTOnce { idt: OnceCell::new() };
 
-
-#[repr(C)]
-pub struct TrapFrame {
-    // registers as pushed by pusha
-    pub edi: u32,
-    pub esi: u32,
-    pub ebp: u32,
-    pub oesp: u32, // useless & ignored
-    pub ebx: u32,
-    pub edx: u32,
-    pub ecx: u32,
-    pub eax: u32,
-
-    pub trapno: u32,
-
-    // below here defined by x86 hardware
-    pub err: u32,
-    pub eip: u32,
-    pub cs: u16,
-    pub padding5: u16,
-    pub eflags: u32,
-
-    // below here only when crossing rings, such as from user to kernel
-    pub esp: u32,
-    pub ss: u16,
-    pub padding6: u16,
+struct TickCounter {
+    ticks: RefCell<u32>
 }
+unsafe impl Sync for TickCounter {}
+static TICKS: TickCounter = TickCounter { ticks: RefCell::new(0) };
 
 
 pub fn tvinit() {
@@ -119,8 +88,8 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 	
     match tf.trapno {
 		TIMER => {
-            *IDT.ticks.borrow_mut() += 1;
-            println!("Tick {}!", IDT.ticks.borrow());
+            *TICKS.ticks.borrow_mut() += 1;
+            println!("Tick {}!", TICKS.ticks.borrow());
 			lapic::lapiceoi();
 		}
 		SEVEN | SPURIOUS => {
