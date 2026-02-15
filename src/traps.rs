@@ -48,7 +48,7 @@ pub struct IDTOnce {
 unsafe impl Sync for IDTOnce {}
 pub static IDT: IDTOnce = IDTOnce { idt: OnceCell::new() };
 
-struct TickCounter {
+pub struct TickCounter {
     ticks: RefCell<u32>
 }
 unsafe impl Sync for TickCounter {}
