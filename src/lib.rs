@@ -54,41 +54,56 @@ fn print_cstr(bytes: &[u8]) {
 }
 
 fn welcome() {
-    const NDIR_READ: usize = 4;
-
-    let root = fs::iget(param::ROOTDEV, fs::ROOTINO);
+    let root = fs::namei("/").unwrap_or_else(|| panic!("root not found"));
     fs::iread(root);
+    let foodir = match fs::dirlookup(root, "foo", None) {
+        Some(idx) => idx,
+        None => {
+            println!("/foo not found. Creating!");
+            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR);
+            fs::iread(idx);
+            let ino = fs::inode_inum(idx);
+            if fs::dirlink(idx, ".", ino) < 0 {
+                panic!("failed to link . in /foo");
+            }
+            if fs::dirlink(idx, "..", ino) < 0 {
+                panic!("failed to link .. in /foo");
+            }
+            if fs::dirlink(root, "foo", ino) < 0 {
+                panic!("failed to link /foo in root");
+            }
+            idx
+        }
+    };
 
-    let mut raw_entries = [0u8; fs::DIRENT_SIZE * NDIR_READ];
-    let entries_len = raw_entries.len() as u32;
-    let n = fs::readi(root, &mut raw_entries, 0, entries_len);
-    println!("Read {} bytes from inode of root directory", n);
+    let wtxt = match fs::namei("/foo/greet.txt") {
+        Some(idx) => idx,
+        None => {
+            println!("/foo/greet.txt not found. Creating!");
+            let wtxt_orig =
+                fs::namei("/welcome.txt").unwrap_or_else(|| panic!("/welcome.txt missing"));
+            let inum = fs::inode_inum(wtxt_orig);
+            if fs::dirlink(foodir, "greet.txt", inum) < 0 {
+                panic!("failed to link greet.txt in /foo");
+            }
+            fs::irelease(wtxt_orig);
+            fs::namei("/foo/greet.txt").unwrap_or_else(|| panic!("greet.txt lookup failed"))
+        }
+    };
 
-    let mut entries = [fs::Dirent::new(); NDIR_READ];
-    for i in 0..NDIR_READ {
-        let start = i * fs::DIRENT_SIZE;
-        let end = start + fs::DIRENT_SIZE;
-        entries[i] = fs::parse_dirent(&raw_entries[start..end]);
-
-        print_bytes(b"name: ");
-        print_cstr(&entries[i].name);
-        println!(" is at inum: {}", entries[i].inum);
-    }
-
-    let wtxt = fs::iget(param::ROOTDEV, entries[2].inum as u32);
     fs::iread(wtxt);
     let mut st = fs::Stat::new();
     fs::stati(wtxt, &mut st);
-    println!(
-        "\nwelcome.txt stats: Device {}, inode number {}, type {}, number of links {}, size {}",
-        st.dev, st.ino, st.type_, st.nlink, st.size
-    );
 
     let mut greet = [0u8; 512];
     let n = fs::readi(wtxt, &mut greet, 0, st.size);
-    println!("Read {} bytes from welcome.txt", n);
+    println!("Read {} bytes from /foo/greet.txt", n);
     print_bytes(&greet[..n as usize]);
     console::consputc('\n');
+
+    fs::irelease(wtxt);
+    fs::irelease(foodir);
+    fs::irelease(root);
 }
 
 extern "C" {
