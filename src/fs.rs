@@ -2,6 +2,7 @@ use core::cmp::min;
 
 use crate::bio;
 use crate::buf::BSIZE;
+use crate::log;
 use crate::param::NINODE;
 use crate::println;
 
@@ -214,7 +215,7 @@ pub fn iinit(dev: u32) {
 fn bzero(dev: u32, bno: u32) {
     let bp = bio::bread(dev, bno);
     bio::buf_mut(bp).data.fill(0);
-    bio::bwrite(bp);
+    log::log_write(bp);
     bio::brelse(bp);
 }
 
@@ -240,7 +241,7 @@ fn balloc(dev: u32) -> u32 {
             }
 
             if let Some(blockno) = found {
-                bio::bwrite(bp);
+                log::log_write(bp);
                 bio::brelse(bp);
                 bzero(dev, blockno);
                 return blockno;
@@ -272,7 +273,7 @@ pub fn ialloc(dev: u32, type_: i16) -> usize {
                     data[off..off + DINODE_SIZE].fill(0);
                     write_i16_le(data, off, type_);
                 }
-                bio::bwrite(bp);
+                log::log_write(bp);
                 bio::brelse(bp);
                 return iget(dev, inum);
             }
@@ -319,7 +320,7 @@ pub fn iupdate(idx: usize) {
             }
         }
 
-        bio::bwrite(bp);
+        log::log_write(bp);
         bio::brelse(bp);
     }
 }
@@ -422,7 +423,7 @@ fn bmap(idx: usize, bn: u32) -> u32 {
                     let data = &mut bio::buf_mut(bp).data;
                     write_u32_le(data, (bn as usize) * 4, addr);
                 }
-                bio::bwrite(bp);
+                log::log_write(bp);
             }
             bio::brelse(bp);
             return addr;
@@ -515,7 +516,7 @@ pub fn writei(idx: usize, src: &[u8], off: u32, n: u32) -> i32 {
             let boff = cur_off as usize % BSIZE;
             bio::buf_mut(bp).data[boff..boff + m]
                 .copy_from_slice(&src[tot as usize..tot as usize + m]);
-            bio::bwrite(bp);
+            log::log_write(bp);
             bio::brelse(bp);
 
             tot += m as u32;

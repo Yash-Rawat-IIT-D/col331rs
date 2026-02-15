@@ -18,6 +18,7 @@ mod buf;
 mod bio;
 mod ide;
 mod fs;
+mod log;
 use crate::traps::*;
 
 #[macro_export]
@@ -59,6 +60,7 @@ fn welcome() {
     let foodir = match fs::dirlookup(root, "foo", None) {
         Some(idx) => idx,
         None => {
+            log::begin_op();
             println!("/foo not found. Creating!");
             let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR);
             fs::iread(idx);
@@ -72,6 +74,7 @@ fn welcome() {
             if fs::dirlink(root, "foo", ino) < 0 {
                 panic!("failed to link /foo in root");
             }
+            log::end_op();
             idx
         }
     };
@@ -79,6 +82,7 @@ fn welcome() {
     let wtxt = match fs::namei("/foo/greet.txt") {
         Some(idx) => idx,
         None => {
+            log::begin_op();
             println!("/foo/greet.txt not found. Creating!");
             let wtxt_orig =
                 fs::namei("/welcome.txt").unwrap_or_else(|| panic!("/welcome.txt missing"));
@@ -87,6 +91,7 @@ fn welcome() {
                 panic!("failed to link greet.txt in /foo");
             }
             fs::irelease(wtxt_orig);
+            log::end_op();
             fs::namei("/foo/greet.txt").unwrap_or_else(|| panic!("greet.txt lookup failed"))
         }
     };
@@ -123,6 +128,7 @@ pub extern "C" fn entryofrust() -> ! {
     idtinit();
     x86::sti();
     fs::iinit(param::ROOTDEV);
+    log::initlog(param::ROOTDEV);
     welcome();
 
     loop {
