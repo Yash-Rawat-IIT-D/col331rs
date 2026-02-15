@@ -1,0 +1,10 @@
+[build]
+# Use the custom i686 bare-metal target by default
+target = "targets/i686-stage-3.json"
+
+[unstable]
+# Required for custom JSON target
+json-target-spec = true
+
+# Required for OS-level project (core only)
+build-std = ["core"]
