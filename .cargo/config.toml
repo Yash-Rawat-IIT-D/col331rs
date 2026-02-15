@@ -1,0 +1,6 @@
+[build]
+target = "targets/i686-stage-3.json"
+
+[unstable]
+build-std = ["core"]
+build-std-features = ["compiler-builtins-mem"]
