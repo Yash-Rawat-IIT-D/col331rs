@@ -1,6 +1,6 @@
 use core::ptr::{read_volatile, write_volatile};
 use crate::mp::MP_ONCE;
-use crate::traps::{T_IRQ0, IRQ_TIMER, IRQ_SPURIOUS, IRQ_ERROR};
+use crate::constants::{IRQ_ERROR, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0};
 
 const ID: isize = 0x0020 / 4;
 const VER: isize = 0x0030 / 4;
@@ -70,7 +70,7 @@ pub fn lapicinit() {
 	// TICR would be calibrated using an external time source.
 	lapicw(TDCR, X1);
 	lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
-	lapicw(TICR, 1000000000);
+	lapicw(TICR, 10000000);
 
 
 	// Disable logical interrupt lines.

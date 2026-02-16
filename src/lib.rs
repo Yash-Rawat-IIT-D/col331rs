@@ -83,5 +83,5 @@ pub extern "C" fn entryofrust() -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("Kernel Panic: {:?}", info);
-    loop {}
+    halt()
 }
