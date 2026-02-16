@@ -11,6 +11,10 @@ pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();
 pub const DIRSIZ: usize = 14;
 pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
 
+pub const T_DIR: i16 = 1;  // Directory
+pub const T_FILE: i16 = 2; // File
+pub const T_DEV: i16 = 3;  // Device
+
 const DINODE_SIZE: usize = 2 + 2 + 2 + 2 + 4 + ((NDIRECT + 1) * 4);
 const IPB: u32 = (BSIZE / DINODE_SIZE) as u32;
 
@@ -176,6 +180,17 @@ pub fn iinit(dev: u32) {
     }
 }
 
+/// Decrement reference count of inode at index idx.
+/// Mirrors C: static void irelse(struct inode *ip) { ip->ref--; }
+fn irelse(idx: usize) {
+    unsafe {
+        if idx >= NINODE {
+            panic!("irelse: bad inode index");
+        }
+        ICACHE.inode[idx].refcnt -= 1;
+    }
+}
+
 pub fn iget(dev: u32, inum: u32) -> usize {
     unsafe {
         let mut empty: Option<usize> = None;
@@ -313,4 +328,179 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
 
         n as i32
     }
+}
+
+// =====================================================================
+// Directories
+// =====================================================================
+
+/// Compare two directory entry names (up to DIRSIZ bytes).
+/// Mirrors C: int namecmp(const char *s, const char *t) { return strncmp(s, t, DIRSIZ); }
+pub fn namecmp(s: &[u8], t: &[u8]) -> bool {
+    let slen = s.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(s.len()));
+    let tlen = t.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(t.len()));
+    if slen != tlen {
+        return false;
+    }
+    for i in 0..slen {
+        if s[i] != t[i] {
+            return false;
+        }
+    }
+    true
+}
+
+/// Look for a directory entry in a directory inode.
+/// If found, return the inode cache index of the entry.
+/// Mirrors C: struct inode* dirlookup(struct inode *dp, char *name, uint *poff)
+pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
+    unsafe {
+        if dp_idx >= NINODE {
+            panic!("dirlookup: bad inode index");
+        }
+
+        let dp = &ICACHE.inode[dp_idx];
+        if dp.type_ != T_DIR {
+            panic!("dirlookup not DIR");
+        }
+
+        let mut off: u32 = 0;
+        let de_size = DIRENT_SIZE as u32;
+
+        while off < dp.size {
+            let mut raw = [0u8; DIRENT_SIZE];
+            if readi(dp_idx, &mut raw, off, de_size) != de_size as i32 {
+                panic!("dirlookup read");
+            }
+
+            let de = parse_dirent(&raw);
+            if de.inum == 0 {
+                off += de_size;
+                continue;
+            }
+
+            if namecmp(name, &de.name) {
+                // entry matches path element
+                let inum = de.inum as u32;
+                return Some(iget(dp.dev, inum));
+            }
+            off += de_size;
+        }
+
+        None
+    }
+}
+
+// =====================================================================
+// Paths
+// =====================================================================
+
+/// Copy the next path element from path into name.
+/// Return the remaining path after the element (with leading slashes stripped),
+/// or None if there is no element to extract.
+///
+/// Mirrors C:
+///   skipelem("a/bb/c", name) = "bb/c", setting name = "a"
+///   skipelem("///a//bb", name) = "bb", setting name = "a"
+///   skipelem("a", name) = "", setting name = "a"
+///   skipelem("", name) = skipelem("////", name) = 0
+fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
+    let mut i = 0;
+
+    // Skip leading slashes
+    while i < path.len() && path[i] == b'/' {
+        i += 1;
+    }
+    if i >= path.len() || path[i] == 0 {
+        return None;
+    }
+
+    let start = i;
+    // Find end of this path element
+    while i < path.len() && path[i] != b'/' && path[i] != 0 {
+        i += 1;
+    }
+    let len = i - start;
+
+    // Copy element into name
+    if len >= DIRSIZ {
+        name.copy_from_slice(&path[start..start + DIRSIZ]);
+    } else {
+        name[..len].copy_from_slice(&path[start..start + len]);
+        name[len] = 0;
+        // Zero out rest of name for cleanliness
+        for j in (len + 1)..DIRSIZ {
+            name[j] = 0;
+        }
+    }
+
+    // Skip trailing slashes
+    while i < path.len() && path[i] == b'/' {
+        i += 1;
+    }
+
+    Some(&path[i..])
+}
+
+/// Look up and return the inode cache index for a path name.
+/// If nameiparent_flag is true, return the inode for the parent and copy
+/// the final path element into name.
+///
+/// Mirrors C: static struct inode* namex(char *path, int nameiparent, char *name)
+fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option<usize> {
+    let mut ip = iget(crate::param::ROOTDEV, ROOTINO);
+
+    let mut remaining = path;
+    loop {
+        match skipelem(remaining, name) {
+            None => break,
+            Some(rest) => {
+                iread(ip);
+                unsafe {
+                    if ICACHE.inode[ip].type_ != T_DIR {
+                        irelse(ip);
+                        return None;
+                    }
+                }
+
+                // If looking for parent and this is the last element
+                if nameiparent_flag && (rest.is_empty() || rest[0] == 0) {
+                    // Stop one level early.
+                    return Some(ip);
+                }
+
+                match dirlookup(ip, name) {
+                    None => {
+                        irelse(ip);
+                        return None;
+                    }
+                    Some(next) => {
+                        irelse(ip);
+                        ip = next;
+                    }
+                }
+                remaining = rest;
+            }
+        }
+    }
+
+    if nameiparent_flag {
+        irelse(ip);
+        return None;
+    }
+    Some(ip)
+}
+
+/// Look up the inode cache index for a path name.
+/// Mirrors C: struct inode* namei(char *path)
+pub fn namei(path: &[u8]) -> Option<usize> {
+    let mut name = [0u8; DIRSIZ];
+    namex(path, false, &mut name)
+}
+
+/// Look up the parent inode for a path name, and copy the final
+/// path element into name.
+/// Mirrors C: struct inode* nameiparent(char *path, char *name)
+pub fn nameiparent(path: &[u8], name: &mut [u8; DIRSIZ]) -> Option<usize> {
+    namex(path, true, name)
 }

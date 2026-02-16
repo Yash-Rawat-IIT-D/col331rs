@@ -3,7 +3,7 @@ RS = src/*.rs
 
 # Cross-compiling (e.g., on Mac OS X)
 #TOOLPREFIX = i386-jos-elf
-#TOOLPREFIX = i386-elf-
+# TOOLPREFIX = i686-elf-
 
 # Using native tools (e.g., on X86 Linux)
 #TOOLPREFIX = 
@@ -69,8 +69,8 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
-mkfs: ../col331/mkfs.c ../col331/fs.h ../col331/types.h ../col331/stat.h ../col331/param.h
-	gcc -Werror -Wall -o mkfs ../col331/mkfs.c
+mkfs: src/mkfs.rs
+	rustc -W warnings -o mkfs src/mkfs.rs
 
 fs.img: mkfs welcome.txt
 	./mkfs fs.img welcome.txt
@@ -87,7 +87,7 @@ kernel.a: $(RS)
 	cargo rustc -Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec --target ./targets/i686.json --lib --release -- -A warnings --emit link=kernel.a
 
 kernel: kernel.a $(OBJS) ./linkers/kernel.ld
-	ld -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a
+	$(LD) -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a
 	$(OBJDUMP) -S -D kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 

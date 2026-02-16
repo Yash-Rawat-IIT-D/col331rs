@@ -54,28 +54,11 @@ fn print_cstr(bytes: &[u8]) {
 }
 
 fn welcome() {
-    const NDIR_READ: usize = 4;
-
-    let root = fs::iget(param::ROOTDEV, fs::ROOTINO);
-    fs::iread(root);
-
-    let mut raw_entries = [0u8; fs::DIRENT_SIZE * NDIR_READ];
-    let entries_len = raw_entries.len() as u32;
-    let n = fs::readi(root, &mut raw_entries, 0, entries_len);
-    println!("Read {} bytes from inode of root directory", n);
-
-    let mut entries = [fs::Dirent::new(); NDIR_READ];
-    for i in 0..NDIR_READ {
-        let start = i * fs::DIRENT_SIZE;
-        let end = start + fs::DIRENT_SIZE;
-        entries[i] = fs::parse_dirent(&raw_entries[start..end]);
-
-        print_bytes(b"name: ");
-        print_cstr(&entries[i].name);
-        println!(" is at inum: {}", entries[i].inum);
-    }
-
-    let wtxt = fs::iget(param::ROOTDEV, entries[2].inum as u32);
+    // p9: Use namei to look up /welcome.txt by path instead of manually
+    // reading directory entries from the root inode.
+    let wtxt = fs::namei(b"/welcome.txt").unwrap_or_else(|| {
+        panic!("welcome: /welcome.txt not found");
+    });
     fs::iread(wtxt);
     let mut st = fs::Stat::new();
     fs::stati(wtxt, &mut st);
