@@ -30,8 +30,8 @@ macro_rules! println {
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);
-        x86::outw(0xB004, 0x2000);
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
@@ -57,5 +57,5 @@ pub extern "C" fn entryofrust() -> ! {
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("Kernel Panic: {:?}", info);
-    loop {}
+    halt()
 }
