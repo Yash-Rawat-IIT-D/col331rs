@@ -335,7 +335,6 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
 // =====================================================================
 
 /// Compare two directory entry names (up to DIRSIZ bytes).
-/// Mirrors C: int namecmp(const char *s, const char *t) { return strncmp(s, t, DIRSIZ); }
 pub fn namecmp(s: &[u8], t: &[u8]) -> bool {
     let slen = s.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(s.len()));
     let tlen = t.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(t.len()));
@@ -352,7 +351,6 @@ pub fn namecmp(s: &[u8], t: &[u8]) -> bool {
 
 /// Look for a directory entry in a directory inode.
 /// If found, return the inode cache index of the entry.
-/// Mirrors C: struct inode* dirlookup(struct inode *dp, char *name, uint *poff)
 pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
     unsafe {
         if dp_idx >= NINODE {
@@ -398,12 +396,6 @@ pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
 /// Copy the next path element from path into name.
 /// Return the remaining path after the element (with leading slashes stripped),
 /// or None if there is no element to extract.
-///
-/// Mirrors C:
-///   skipelem("a/bb/c", name) = "bb/c", setting name = "a"
-///   skipelem("///a//bb", name) = "bb", setting name = "a"
-///   skipelem("a", name) = "", setting name = "a"
-///   skipelem("", name) = skipelem("////", name) = 0
 fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
     let mut i = 0;
 
@@ -445,8 +437,6 @@ fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
 /// Look up and return the inode cache index for a path name.
 /// If nameiparent_flag is true, return the inode for the parent and copy
 /// the final path element into name.
-///
-/// Mirrors C: static struct inode* namex(char *path, int nameiparent, char *name)
 fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option<usize> {
     let mut ip = iget(crate::param::ROOTDEV, ROOTINO);
 
