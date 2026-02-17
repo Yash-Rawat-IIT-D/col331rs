@@ -18,6 +18,8 @@ mod buf;
 mod bio;
 mod ide;
 mod fs;
+mod file;
+mod fcntl;
 use crate::traps::*;
 
 #[macro_export]
@@ -38,12 +40,6 @@ fn halt() -> ! {
     }
 }
 
-fn print_bytes(bytes: &[u8]) {
-    for &ch in bytes {
-        console::consputc(ch as char);
-    }
-}
-
 fn print_cstr(bytes: &[u8]) {
     for &ch in bytes {
         if ch == 0 {
@@ -54,56 +50,46 @@ fn print_cstr(bytes: &[u8]) {
 }
 
 fn welcome() {
-    let root = fs::namei("/").unwrap_or_else(|| panic!("root not found"));
-    fs::iread(root);
-    let foodir = match fs::dirlookup(root, "foo", None) {
-        Some(idx) => idx,
-        None => {
-            println!("/foo not found. Creating!");
-            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR);
-            fs::iread(idx);
-            let ino = fs::inode_inum(idx);
-            if fs::dirlink(idx, ".", ino) < 0 {
-                panic!("failed to link . in /foo");
-            }
-            if fs::dirlink(idx, "..", ino) < 0 {
-                panic!("failed to link .. in /foo");
-            }
-            if fs::dirlink(root, "foo", ino) < 0 {
-                panic!("failed to link /foo in root");
-            }
-            idx
-        }
-    };
+    let _ = file::create("/foo", fs::T_DIR, 0, 0);
 
-    let wtxt = match fs::namei("/foo/greet.txt") {
-        Some(idx) => idx,
-        None => {
-            println!("/foo/greet.txt not found. Creating!");
-            let wtxt_orig =
-                fs::namei("/welcome.txt").unwrap_or_else(|| panic!("/welcome.txt missing"));
-            let inum = fs::inode_inum(wtxt_orig);
-            if fs::dirlink(foodir, "greet.txt", inum) < 0 {
-                panic!("failed to link greet.txt in /foo");
-            }
-            fs::irelease(wtxt_orig);
-            fs::namei("/foo/greet.txt").unwrap_or_else(|| panic!("greet.txt lookup failed"))
-        }
-    };
+    let gtxt = file::open("/foo/hello.txt", fcntl::O_CREATE | fcntl::O_WRONLY)
+        .unwrap_or_else(|| panic!("failed to create /foo/hello.txt"));
+    let n = file::filewrite(gtxt, b"hello\0", 6);
+    println!("Wrote {} characters to /foo/hello.txt", n);
+    file::fileclose(gtxt);
 
-    fs::iread(wtxt);
-    let mut st = fs::Stat::new();
-    fs::stati(wtxt, &mut st);
-
-    let mut greet = [0u8; 512];
-    let n = fs::readi(wtxt, &mut greet, 0, st.size);
-    println!("Read {} bytes from /foo/greet.txt", n);
-    print_bytes(&greet[..n as usize]);
+    let gtxt = file::open("/foo/hello.txt", fcntl::O_RDONLY)
+        .unwrap_or_else(|| panic!("unable to open /foo/hello.txt"));
+    let mut welcome = [0u8; 512];
+    let n = file::fileread(gtxt, &mut welcome, 6);
+    println!("Read {} chars from /foo/hello.txt: ", n);
+    print_cstr(&welcome);
     console::consputc('\n');
+    file::fileclose(gtxt);
 
-    fs::irelease(wtxt);
-    fs::irelease(foodir);
-    fs::irelease(root);
+    let mut name = [0u8; fs::DIRSIZ];
+    if file::unlink("/foo/hello.txt", &mut name) < 0 {
+        panic!("failed to unlink /foo/hello.txt");
+    }
+
+    let foo = fs::namei("/foo").unwrap_or_else(|| panic!("unable to open /foo"));
+    if !file::isdirempty(foo) {
+        panic!("/foo should be empty");
+    }
+    fs::iput(foo);
+
+    if let Some(f) = file::open("/foo/hello.txt", fcntl::O_RDONLY) {
+        file::fileclose(f);
+        panic!("could open /foo/hello.txt after unlinking");
+    }
+
+    let wtxt =
+        file::open("/welcome.txt", fcntl::O_RDONLY).unwrap_or_else(|| panic!("unable to open /welcome.txt"));
+    let welcome_cap = welcome.len() as i32;
+    let n = file::fileread(wtxt, &mut welcome, welcome_cap);
+    println!("Read {} chars from /welcome.txt:", n);
+    print_cstr(&welcome);
+    file::fileclose(wtxt);
 }
 
 extern "C" {
@@ -123,6 +109,7 @@ pub extern "C" fn entryofrust() -> ! {
     idtinit();
     x86::sti();
     fs::iinit(param::ROOTDEV);
+    file::fileinit();
     welcome();
 
     loop {

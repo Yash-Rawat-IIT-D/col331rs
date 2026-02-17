@@ -2,7 +2,7 @@ use core::cmp::min;
 
 use crate::bio;
 use crate::buf::BSIZE;
-use crate::param::NINODE;
+use crate::param::{NINODE, ROOTDEV};
 use crate::println;
 
 pub const ROOTINO: u32 = 1;
@@ -254,6 +254,26 @@ fn balloc(dev: u32) -> u32 {
     panic!("balloc: out of blocks");
 }
 
+fn bfree(dev: u32, b: u32) {
+    unsafe {
+        let bp = bio::bread(dev, bblock(b, &SB));
+        let bi = b % BPB;
+        let m: u8 = 1u8 << (bi % 8);
+        let idx = (bi / 8) as usize;
+
+        {
+            let data = &mut bio::buf_mut(bp).data;
+            if (data[idx] & m) == 0 {
+                panic!("freeing free block");
+            }
+            data[idx] &= !m;
+        }
+
+        bio::bwrite(bp);
+        bio::brelse(bp);
+    }
+}
+
 pub fn ialloc(dev: u32, type_: i16) -> usize {
     unsafe {
         let mut inum = 1u32;
@@ -285,16 +305,67 @@ pub fn ialloc(dev: u32, type_: i16) -> usize {
     panic!("ialloc: no inodes");
 }
 
-pub fn irelease(idx: usize) {
+fn itrunc(idx: usize) {
     unsafe {
         if idx >= NINODE {
-            panic!("irelease: bad inode index");
+            panic!("itrunc: bad inode index");
+        }
+
+        let dev = ICACHE.inode[idx].dev;
+        for i in 0..NDIRECT {
+            let addr = ICACHE.inode[idx].addrs[i];
+            if addr != 0 {
+                bfree(dev, addr);
+                ICACHE.inode[idx].addrs[i] = 0;
+            }
+        }
+
+        let indirect = ICACHE.inode[idx].addrs[NDIRECT];
+        if indirect != 0 {
+            let bp = bio::bread(dev, indirect);
+            for j in 0..NINDIRECT {
+                let off = j * 4;
+                let a = {
+                    let data = &bio::buf_mut(bp).data;
+                    read_u32_le(data, off)
+                };
+                if a != 0 {
+                    bfree(dev, a);
+                }
+            }
+            bio::brelse(bp);
+            bfree(dev, indirect);
+            ICACHE.inode[idx].addrs[NDIRECT] = 0;
+        }
+
+        ICACHE.inode[idx].size = 0;
+    }
+
+    iupdate(idx);
+}
+
+pub fn iput(idx: usize) {
+    unsafe {
+        if idx >= NINODE {
+            panic!("iput: bad inode index");
         }
         if ICACHE.inode[idx].refcnt < 1 {
-            panic!("irelease: ref underflow");
+            panic!("iput: ref underflow");
         }
+
+        if ICACHE.inode[idx].valid != 0 && ICACHE.inode[idx].nlink == 0 && ICACHE.inode[idx].refcnt == 1 {
+            itrunc(idx);
+            ICACHE.inode[idx].type_ = 0;
+            iupdate(idx);
+            ICACHE.inode[idx].valid = 0;
+        }
+
         ICACHE.inode[idx].refcnt -= 1;
     }
+}
+
+pub fn irelease(idx: usize) {
+    iput(idx);
 }
 
 pub fn iupdate(idx: usize) {
@@ -454,7 +525,7 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
         }
 
         let ip = &ICACHE.inode[idx];
-        if off > ip.size || off.checked_add(n).is_none() {
+        if off > ip.size || off.checked_add(n).is_none() || ip.nlink < 1 {
             return -1;
         }
 
@@ -540,15 +611,78 @@ pub fn inode_inum(idx: usize) -> u32 {
     }
 }
 
+pub fn inode_dev(idx: usize) -> u32 {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_dev: bad inode index");
+        }
+        ICACHE.inode[idx].dev
+    }
+}
+
+pub fn inode_type(idx: usize) -> i16 {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_type: bad inode index");
+        }
+        ICACHE.inode[idx].type_
+    }
+}
+
+pub fn inode_nlink(idx: usize) -> i16 {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_nlink: bad inode index");
+        }
+        ICACHE.inode[idx].nlink
+    }
+}
+
+pub fn inode_size(idx: usize) -> u32 {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_size: bad inode index");
+        }
+        ICACHE.inode[idx].size
+    }
+}
+
+pub fn inode_set_meta(idx: usize, major: i16, minor: i16, nlink: i16) {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_set_meta: bad inode index");
+        }
+        ICACHE.inode[idx].major = major;
+        ICACHE.inode[idx].minor = minor;
+        ICACHE.inode[idx].nlink = nlink;
+    }
+}
+
+pub fn inode_inc_nlink(idx: usize) {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_inc_nlink: bad inode index");
+        }
+        ICACHE.inode[idx].nlink += 1;
+    }
+}
+
+pub fn inode_dec_nlink(idx: usize) {
+    unsafe {
+        if idx >= NINODE {
+            panic!("inode_dec_nlink: bad inode index");
+        }
+        ICACHE.inode[idx].nlink -= 1;
+    }
+}
+
 pub fn namecmp(s: &str, t: &[u8; DIRSIZ]) -> bool {
     name_to_dirsiz(s) == *t
 }
 
 pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Option<usize> {
-    unsafe {
-        if dp_idx >= NINODE {
-            panic!("dirlookup: bad inode index");
-        }
+    if dp_idx >= NINODE {
+        panic!("dirlookup: bad inode index");
     }
     iread(dp_idx);
 
@@ -580,7 +714,7 @@ pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Optio
 
 pub fn dirlink(dp_idx: usize, name: &str, inum: u32) -> i32 {
     if let Some(ip_idx) = dirlookup(dp_idx, name, None) {
-        irelease(ip_idx);
+        iput(ip_idx);
         return -1;
     }
 
@@ -642,7 +776,7 @@ fn skipelem(path: &[u8], mut i: usize, name: &mut [u8; DIRSIZ]) -> Option<usize>
 fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize> {
     let bytes = path.as_bytes();
     let mut path_idx = 0usize;
-    let mut ip = iget(crate::param::ROOTDEV, ROOTINO);
+    let mut ip = iget(ROOTDEV, ROOTINO);
 
     while let Some(next_idx) = skipelem(bytes, path_idx, name) {
         path_idx = next_idx;
@@ -650,7 +784,7 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
 
         unsafe {
             if ICACHE.inode[ip].type_ != T_DIR {
-                irelease(ip);
+                iput(ip);
                 return None;
             }
         }
@@ -664,16 +798,16 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
         let next = match dirlookup(ip, trimmed, None) {
             Some(x) => x,
             None => {
-                irelease(ip);
+                iput(ip);
                 return None;
             }
         };
-        irelease(ip);
+        iput(ip);
         ip = next;
     }
 
     if nameiparent {
-        irelease(ip);
+        iput(ip);
         return None;
     }
     Some(ip)

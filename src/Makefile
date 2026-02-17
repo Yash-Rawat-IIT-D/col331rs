@@ -69,8 +69,8 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
-mkfs: ../../col331/mkfs.c ../../col331/fs.h ../../col331/types.h ../../col331/stat.h ../../col331/param.h
-	gcc -Werror -Wall -o mkfs ../../col331/mkfs.c
+mkfs: mkfs.rs
+	rustc -W warnings -o mkfs mkfs.rs
 
 fs: fs.img
 
@@ -90,7 +90,7 @@ kernel.a: $(RS)
 
 
 kernel: kernel.a $(OBJS) ./linkers/kernel.ld
-	ld -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a
+	$(LD) -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a
 	$(OBJDUMP) -S -D kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
