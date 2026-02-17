@@ -10,9 +10,11 @@ RS = src/*.rs
 
 # Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
-TOOLPREFIX := $(shell if i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/null 2>&1; \
+TOOLPREFIX := $(shell if command -v i386-jos-elf-gcc >/dev/null 2>&1 && i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/null 2>&1; \
 	then echo 'i386-jos-elf-'; \
-	elif objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
+	elif command -v i686-elf-gcc >/dev/null 2>&1 && i686-elf-objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
+	then echo 'i686-elf-'; \
+	elif command -v gcc >/dev/null 2>&1 && objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
 	then echo ''; \
 	else echo "***" 1>&2; \
 	echo "*** Error: Couldn't find an i386-*-elf version of GCC/binutils." 1>&2; \
@@ -23,7 +25,6 @@ TOOLPREFIX := $(shell if i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/d
 	echo "*** To turn off this error, run 'gmake TOOLPREFIX= ...'." 1>&2; \
 	echo "***" 1>&2; exit 1; fi)
 endif
-TOOLPREFIX=i686-elf-
 
 # If the makefile can't find QEMU, specify its path here
 # QEMU = qemu-system-i386
