@@ -27,6 +27,17 @@ macro_rules! println {
     });
 }
 
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    // Disable interrupts to prevent interrupt handlers from interfering
+    cli();
+    // Print panic message with LAPIC ID to identify which CPU panicked
+    println!("lapicid {}:\n{:#?}", lapicid(), info);
+    unsafe { PANICKED = true; }
+    // Halt the system
+    loop {}
+}
+
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
@@ -54,8 +65,3 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    println!("Kernel Panic: {:?}", info);
-    loop {}
-}
