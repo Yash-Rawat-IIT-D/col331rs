@@ -2,6 +2,8 @@
 #![no_main]      // No main function
 
 use core::panic::PanicInfo;
+use crate::x86::cli;
+use crate::lapic::lapicid;
 
 mod param;
 mod x86;
@@ -26,6 +28,8 @@ macro_rules! println {
         let _ = writeln!(&mut console, $($arg)*);
     });
 }
+
+static mut PANICKED: bool = false;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
