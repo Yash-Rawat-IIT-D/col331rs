@@ -1,5 +1,6 @@
 #![no_std]       // No standard library
 #![no_main]      // No main function
+#![allow(dead_code)]
 
 use core::panic::PanicInfo;
 use crate::x86::cli;
@@ -50,8 +51,9 @@ fn halt() -> ! {
     }
 }
 
+// alltraps is an assembly label not a static function pointer
 extern "C" {
-    pub static alltraps: fn();
+    fn alltraps();
 }
 
 #[no_mangle]

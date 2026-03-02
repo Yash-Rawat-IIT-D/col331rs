@@ -1,7 +1,7 @@
 use core::ptr::{read_volatile, write_volatile};
 use crate::mp::MP_ONCE;
-use crate::console::Console;
-use core::fmt::Write;
+// use crate::console::Console;
+// use core::fmt::Write;
 use crate::println;
 
 // I/O APIC default physical address

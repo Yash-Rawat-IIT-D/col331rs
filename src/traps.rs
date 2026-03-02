@@ -1,6 +1,7 @@
 use modular_bitfield::prelude::*;
 use core::cell::OnceCell;
 use core::sync::atomic::{AtomicU32, Ordering};
+use core::ptr::addr_of_mut;
 use crate::proc::cpuid;
 use crate::println;
 use crate::lapic::lapiceoi;
@@ -86,12 +87,12 @@ pub fn tvinit() {
         );
     }
     unsafe {
-        let _ = IDT.set(arr);
+        let _ = (*addr_of_mut!(IDT)).set(arr);
     }
 }
 
 pub fn idtinit() {
-    let idt = unsafe { IDT.get().expect("IDT not initialized") };
+    let idt = unsafe { (*addr_of_mut!(IDT)).get().expect("IDT not initialized") };
     lidt(idt, core::mem::size_of::<[GateDesc; 256]>() as usize);
 }
 
