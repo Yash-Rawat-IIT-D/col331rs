@@ -6,12 +6,8 @@ use crate::println;
 use crate::lapic::lapiceoi;
 use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
-use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0};
+use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, SEG_KCODE, STS_IG32, STS_TG32};
 use crate::uart::uartintr;
-
-const SEG_KCODE: u16 = 1;
-const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
-const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
 
 extern "C" {
     static vectors: [usize; 256]; // in vectors.S: array of 256 entry pointers

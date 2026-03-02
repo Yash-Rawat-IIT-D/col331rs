@@ -222,6 +222,7 @@ pub fn mpinit() {
         let ioapicid = unsafe { (*ioapic).apicno };
         MP_ONCE.ioapic_id.set(ioapicid)
           .expect("ioapic_id already initialized");
+        // p = unsafe{ p.add(mem::size_of::<MpIoApic>()) };
         p = p.wrapping_add(mem::size_of::<MpIoApic>());
       }
       MPBUS | MPIOINTR | MPLINTR => {
