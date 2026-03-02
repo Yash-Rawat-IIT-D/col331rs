@@ -1,5 +1,6 @@
 #![no_std]       // No standard library
 #![no_main]      // No main function
+#![allow(dead_code)]
 
 use core::panic::PanicInfo;
 use crate::x86::cli;
@@ -59,6 +60,7 @@ fn welcome() {
     bio::brelse(b1);
 }
 
+// alltraps is an assembly label not a static function pointer in Rust
 extern "C" {
     pub fn alltraps();
 }
