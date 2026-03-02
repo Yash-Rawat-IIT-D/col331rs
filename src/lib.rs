@@ -43,7 +43,7 @@ fn welcome() {
 
     for &byte in data0.iter() {
         if byte == 0 { break; }
-        console::consputc(byte as char);
+        console::consputc(byte as i32);
     }
     bio::brelse(b0);
 
