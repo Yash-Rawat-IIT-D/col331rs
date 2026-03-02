@@ -129,21 +129,22 @@ pub unsafe fn insl(port: u16, addr: *mut u32, cnt: usize) {
 }
 
 
-
+// Output string of dwords to port using rep outsd instruction.
+// Matches the C implementation: outsl(port, addr, cnt)
+// Note: ESI must be saved/restored as LLVM restricts its use in 32-bit mode
 pub unsafe fn outsl(port: u16, addr: *const u32, cnt: usize) {
-    let mut p = addr;
-    for _ in 0..cnt {
-        let val = core::ptr::read(p);
-        asm!(
-            "out dx, eax",
-            in("dx") port,
-            in("eax") val,
-            options(nomem, nostack, preserves_flags),
-        );
-        p = p.add(1);
-    }
+    let addr_val = addr as u32;
+    core::arch::asm!(
+        "push esi",
+        "mov esi, {addr}",
+        "cld",
+        "rep outsd",
+        "pop esi",
+        addr = in(reg) addr_val,
+        in("dx") port,
+        inout("ecx") cnt => _,
+    );
 }
-
 
 /// Halts the CPU until the next interrupt occurs.
 /// The `hlt` instruction:
