@@ -133,7 +133,9 @@ pub fn ideintr() {
     }
 }
 
-// ide.rs
+// Sync buf with disk.
+// If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
+// Else if B_VALID is not set, read buf from disk, set B_VALID.
 pub fn iderw(idx: usize) {
     let b = crate::bio::buf_mut(idx);
 
@@ -148,23 +150,31 @@ pub fn iderw(idx: usize) {
         }
     }
 
-    // PURE POLLING: issue the command directly (no IDEQUEUE).
-    idestart(idx);
-
-    // Wait for completion.
-    if idewait(true) < 0 {
-        panic!("iderw: ide error");
+    // Append b to idequeue.
+    b.qnext = None;
+    unsafe {
+        let mut pp: *mut Option<usize> = &raw mut IDEQUEUE;
+        while let Some(next_idx) = *pp {
+            pp = &raw mut crate::bio::buf_mut(next_idx).qnext;
+        }
+        *pp = Some(idx);
     }
 
-    // If it was a read, pull data now.
-    let flags_now = b.flags.load(Ordering::Acquire);
-    if (flags_now & B_DIRTY) == 0 {
-        unsafe {
-            crate::x86::insl(0x1F0, b.data.as_mut_ptr() as *mut u32, BSIZE / 4);
+    // Start disk if necessary.
+    unsafe {
+        if IDEQUEUE == Some(idx) {
+            idestart(idx);
         }
     }
-    // If it was a write, data was already pushed in idestart() via outsl().
 
-    b.flags.fetch_or(B_VALID, Ordering::AcqRel);
-    b.flags.fetch_and(!B_DIRTY, Ordering::AcqRel);
+    // Wait for request to finish.
+    // The interrupt handler will set B_VALID when done.
+    loop {
+        let flags = b.flags.load(Ordering::Acquire);
+        if (flags & (B_VALID | B_DIRTY)) == B_VALID {
+            break;
+        }
+        // Force compiler to re-read b->flags which is modified by ideintr()
+        x86::noop();
+    }
 }

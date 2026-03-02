@@ -90,7 +90,6 @@ vectors.S: vectors.pl
 -include *.d
 
 clean:
-clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img .gdbinit vectors.S
 	rm -rf target
