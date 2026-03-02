@@ -2,6 +2,8 @@
 #![no_main]      // No main function
 
 use core::panic::PanicInfo;
+use crate::x86::cli;
+use crate::lapic::lapicid;
 
 mod param;
 mod x86;
@@ -80,8 +82,15 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
+static mut PANICKED: bool = false;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("Kernel Panic: {:?}", info);
-    halt()
+    // Disable interrupts to prevent interrupt handlers from interfering
+    cli();
+    // Print panic message with LAPIC ID to identify which CPU panicked
+    println!("lapicid {}:\n{:#?}", lapicid(), info);
+    unsafe { PANICKED = true; }
+    // Halt the system
+    loop {}
 }
