@@ -52,29 +52,30 @@ pub fn consoleintr(getc: fn() -> i32) {
             break;
         }
 
-        let input = unsafe { &mut INPUT };
-
-        match c {
-            x if x == C('U') => {
-                while input.e != input.w && input.buf[(input.e - 1) % INPUT_BUF] != b'\n' {
-                    input.e -= 1;
-                    consputc(BACKSPACE);
+        unsafe {
+            let input = &raw mut INPUT;
+            match c {
+                x if x == C('U') => {
+                    while (*input).e != (*input).w && (*input).buf[((*input).e - 1) % INPUT_BUF] != b'\n' {
+                        (*input).e -= 1;
+                        consputc(BACKSPACE);
+                    }
                 }
-            }
-            x if x == C('H') || x == 0x7f => {
-                if input.e != input.w {
-                    input.e -= 1;
-                    consputc(BACKSPACE);
+                x if x == C('H') || x == 0x7f => {
+                    if (*input).e != (*input).w {
+                        (*input).e -= 1;
+                        consputc(BACKSPACE);
+                    }
                 }
-            }
-            _ => {
-                if c != 0 && input.e.wrapping_sub(input.r) < INPUT_BUF {
-                    let c = if c == '\r' as i32 { '\n' as i32 } else { c };
-                    input.buf[input.e % INPUT_BUF] = c as u8;
-                    input.e += 1;
-                    consputc(c);
-                    if c == '\n' as i32 || c == CTRL_D || input.e == input.r + INPUT_BUF {
-                        input.w = input.e;
+                _ => {
+                    if c != 0 && (*input).e.wrapping_sub((*input).r) < INPUT_BUF {
+                        let c = if c == '\r' as i32 { '\n' as i32 } else { c };
+                        (*input).buf[(*input).e % INPUT_BUF] = c as u8;
+                        (*input).e += 1;
+                        consputc(c);
+                        if c == '\n' as i32 || c == CTRL_D || (*input).e == (*input).r + INPUT_BUF {
+                            (*input).w = (*input).e;
+                        }
                     }
                 }
             }
