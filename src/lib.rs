@@ -1,7 +1,10 @@
 #![no_std]       // No standard library
 #![no_main]      // No main function
+#![allow(dead_code)]
 
 use core::panic::PanicInfo;
+use crate::x86::cli;
+use crate::lapic::lapicid;
 
 mod param;
 mod x86;
@@ -13,7 +16,7 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
-mod constants;
+mod constants;  
 mod buf;
 mod bio;
 mod ide;
@@ -34,14 +37,8 @@ macro_rules! println {
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);
-        x86::outw(0xB004, 0x2000);
-    }
-}
-
-fn print_bytes(bytes: &[u8]) {
-    for &ch in bytes {
-        console::consputc(ch as char);
+        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
+        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
     }
 }
 
@@ -50,7 +47,7 @@ fn print_cstr(bytes: &[u8]) {
         if ch == 0 {
             break;
         }
-        console::consputc(ch as char);
+        console::consputc(ch as i32);
     }
 }
 
@@ -62,7 +59,7 @@ fn welcome() {
         None => {
             log::begin_op();
             println!("/foo not found. Creating!");
-            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR);
+            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR as i16);
             fs::iread(idx);
             let ino = fs::inode_inum(idx);
             if fs::dirlink(idx, ".", ino) < 0 {
@@ -96,19 +93,38 @@ fn welcome() {
         }
     };
 
-    fs::iread(wtxt);
-    let mut st = fs::Stat::new();
-    fs::stati(wtxt, &mut st);
+    let gtxt = file::open("/foo/hello.txt", fcntl::O_RDONLY)
+        .unwrap_or_else(|| panic!("unable to open /foo/hello.txt"));
+    let mut welcome = [0u8; 512];
+    let n = file::fileread(gtxt, &mut welcome, 6);
+    println!("Read {} chars from /foo/hello.txt: ", n);
+    print_cstr(&welcome);
+    console::consputc('\n' as i32);
+    file::fileclose(gtxt);
 
-    let mut greet = [0u8; 512];
-    let n = fs::readi(wtxt, &mut greet, 0, st.size);
-    println!("Read {} bytes from /foo/greet.txt", n);
-    print_bytes(&greet[..n as usize]);
-    console::consputc('\n');
+    let mut name = [0u8; constants::DIRSIZ];
+    if file::unlink("/foo/hello.txt", &mut name) < 0 {
+        panic!("failed to unlink /foo/hello.txt");
+    }
 
-    fs::irelease(wtxt);
-    fs::irelease(foodir);
-    fs::irelease(root);
+    let foo = fs::namei("/foo").unwrap_or_else(|| panic!("unable to open /foo"));
+    if !file::isdirempty(foo) {
+        panic!("/foo should be empty");
+    }
+    fs::iput(foo);
+
+    if let Some(f) = file::open("/foo/hello.txt", fcntl::O_RDONLY) {
+        file::fileclose(f);
+        panic!("could open /foo/hello.txt after unlinking");
+    }
+
+    let wtxt =
+        file::open("/welcome.txt", fcntl::O_RDONLY).unwrap_or_else(|| panic!("unable to open /welcome.txt"));
+    let welcome_cap = welcome.len() as i32;
+    let n = file::fileread(wtxt, &mut welcome, welcome_cap);
+    println!("Read {} chars from /welcome.txt:", n);
+    print_cstr(&welcome);
+    file::fileclose(wtxt);
 }
 
 extern "C" {
@@ -136,8 +152,15 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
+static mut PANICKED: bool = false;
+
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    println!("Kernel Panic: {:?}", info);
+    // Disable interrupts to prevent interrupt handlers from interfering
+    cli();
+    // Print panic message with LAPIC ID to identify which CPU panicked
+    println!("lapicid {}:\n{:#?}", lapicid(), info);
+    unsafe { PANICKED = true; }
+    // Halt the system
     loop {}
 }
