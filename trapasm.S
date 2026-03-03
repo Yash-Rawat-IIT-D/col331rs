@@ -17,3 +17,5 @@ trapret:
   popal
   addl $0x8, %esp  # trapno and errcode
   iret
+
+.section .note.GNU-stack,"",@progbits
