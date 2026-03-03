@@ -312,7 +312,7 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     fs::inode_set_meta(ip, major, minor, 1);
     fs::iupdate(ip);
 
-    if type_ == fs::T_DIR {
+    if (type_ as u16) == fs::T_DIR {
         fs::inode_inc_nlink(dp);
         fs::iupdate(dp);
 

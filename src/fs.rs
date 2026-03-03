@@ -4,21 +4,10 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::{NINODE, ROOTDEV};
 use crate::println;
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, BPB, MAXFILE};
 
-pub const ROOTINO: u32 = 1;
-pub const NDIRECT: usize = 12;
-pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();
-pub const MAXFILE: usize = NDIRECT + NINDIRECT;
-pub const DIRSIZ: usize = 14;
-pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
-pub const BPB: u32 = (BSIZE * 8) as u32;
-
-pub const T_DIR: i16 = 1;
-pub const T_FILE: i16 = 2;
-pub const T_DEV: i16 = 3;
-
-const DINODE_SIZE: usize = 2 + 2 + 2 + 2 + 4 + ((NDIRECT + 1) * 4);
-const IPB: u32 = (BSIZE / DINODE_SIZE) as u32;
+pub use crate::constants::ROOTINO;
+pub use crate::constants::T_DIR;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -162,12 +151,12 @@ fn write_u32_le(data: &mut [u8], off: usize, val: u32) {
 
 #[inline]
 fn iblock(inum: u32, sb: &Superblock) -> u32 {
-    inum / IPB + sb.inodestart
+    inum / (IPB as u32) + sb.inodestart
 }
 
 #[inline]
 fn bblock(b: u32, sb: &Superblock) -> u32 {
-    b / BPB + sb.bmapstart
+    b / (BPB as u32) + sb.bmapstart
 }
 
 #[inline]
@@ -203,10 +192,11 @@ pub fn readsb(dev: u32, sb: &mut Superblock) {
 
 pub fn iinit(dev: u32) {
     unsafe {
-        readsb(dev, &mut SB);
+        readsb(dev, &mut *(&raw mut SB));
+        let sb = &*(&raw const SB);
         println!(
             "sb: size {} nblocks {} ninodes {} nlog {} logstart {} inodestart {} bmap start {}",
-            SB.size, SB.nblocks, SB.ninodes, SB.nlog, SB.logstart, SB.inodestart, SB.bmapstart
+            sb.size, sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart
         );
     }
 }
@@ -222,12 +212,12 @@ fn balloc(dev: u32) -> u32 {
     unsafe {
         let mut b = 0u32;
         while b < SB.size {
-            let bp = bio::bread(dev, bblock(b, &SB));
+            let bp = bio::bread(dev, bblock(b, &*(&raw const SB)));
             let mut found: Option<u32> = None;
             {
                 let data = &mut bio::buf_mut(bp).data;
                 let mut bi = 0u32;
-                while bi < BPB && b + bi < SB.size {
+                while bi < (BPB as u32) && b + bi < SB.size {
                     let m: u8 = 1u8 << (bi % 8);
                     let idx = (bi / 8) as usize;
                     if (data[idx] & m) == 0 {
@@ -247,7 +237,7 @@ fn balloc(dev: u32) -> u32 {
             }
 
             bio::brelse(bp);
-            b += BPB;
+            b += BPB as u32;
         }
     }
 
@@ -278,8 +268,8 @@ pub fn ialloc(dev: u32, type_: i16) -> usize {
     unsafe {
         let mut inum = 1u32;
         while inum < SB.ninodes {
-            let bp = bio::bread(dev, iblock(inum, &SB));
-            let off = (inum % IPB) as usize * DINODE_SIZE;
+            let bp = bio::bread(dev, iblock(inum, &*(&raw const SB)));
+            let off = (inum % (IPB as u32)) as usize * DINODE_SIZE;
 
             let free = {
                 let data = &bio::buf_mut(bp).data;
@@ -375,8 +365,8 @@ pub fn iupdate(idx: usize) {
         }
 
         let ip = &ICACHE.inode[idx];
-        let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
-        let off = (ip.inum % IPB) as usize * DINODE_SIZE;
+        let bp = bio::bread(ip.dev, iblock(ip.inum, &*(&raw const SB)));
+        let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
 
         {
             let data = &mut bio::buf_mut(bp).data;
@@ -436,10 +426,10 @@ pub fn iread(idx: usize) {
         }
 
         if ip.valid == 0 {
-            let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
+            let bp = bio::bread(ip.dev, iblock(ip.inum, &*(&raw const SB)));
             let data = &bio::buf_mut(bp).data;
 
-            let off = (ip.inum % IPB) as usize * DINODE_SIZE;
+            let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
             ip.type_ = read_i16_le(data, off);
             ip.major = read_i16_le(data, off + 2);
             ip.minor = read_i16_le(data, off + 4);
@@ -620,21 +610,21 @@ pub fn inode_dev(idx: usize) -> u32 {
     }
 }
 
-pub fn inode_type(idx: usize) -> i16 {
+pub fn inode_type(idx: usize) -> u16 {
     unsafe {
         if idx >= NINODE {
             panic!("inode_type: bad inode index");
         }
-        ICACHE.inode[idx].type_
+        ICACHE.inode[idx].type_ as u16
     }
 }
 
-pub fn inode_nlink(idx: usize) -> i16 {
+pub fn inode_nlink(idx: usize) -> u16 {
     unsafe {
         if idx >= NINODE {
             panic!("inode_nlink: bad inode index");
         }
-        ICACHE.inode[idx].nlink
+        ICACHE.inode[idx].nlink as u16
     }
 }
 
@@ -688,7 +678,7 @@ pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Optio
 
     unsafe {
         let dp = &ICACHE.inode[dp_idx];
-        if dp.type_ != T_DIR {
+        if (dp.type_ as u16) != T_DIR {
             panic!("dirlookup not DIR");
         }
 
@@ -755,7 +745,8 @@ fn skipelem(path: &[u8], mut i: usize, name: &mut [u8; DIRSIZ]) -> Option<usize>
     }
 
     let start = i;
-    while i < path.len() && path[i] != b'/' {
+    // Find end of this path element
+    while i < path.len() && path[i] != b'/' && path[i] != 0 {
         i += 1;
     }
     let len = i - start;
@@ -783,7 +774,7 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
         iread(ip);
 
         unsafe {
-            if ICACHE.inode[ip].type_ != T_DIR {
+            if ICACHE.inode[ip].type_ as u16 != T_DIR {
                 iput(ip);
                 return None;
             }
@@ -813,11 +804,14 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
     Some(ip)
 }
 
+/// Look up the inode for a path name.
 pub fn namei(path: &str) -> Option<usize> {
     let mut name = [0u8; DIRSIZ];
     namex(path, false, &mut name)
 }
 
+/// Look up the parent inode for a path name.
+/// Copy the final path element into name.
 pub fn nameiparent(path: &str, name: &mut [u8; DIRSIZ]) -> Option<usize> {
     namex(path, true, name)
 }
