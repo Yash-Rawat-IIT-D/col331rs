@@ -61,13 +61,12 @@ mkfs: src/mkfs.rs
 fs.img: mkfs *.txt
 	./mkfs fs.img *.txt
 
-bootblock: bootasm.S bootmain.c
+bootblock: bootasm.S bootmain.c linkers/bootblock.ld
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
 	$(CC) $(CFLAGS) -fno-pic -nostdinc -I. -c bootasm.S
-	$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 -o bootblock.o bootasm.o bootmain.o
-	$(OBJDUMP) -S -D bootblock.o > bootblock.asm
-	$(OBJCOPY) -S -O binary -j .text bootblock.o bootblock
-	./sign.pl bootblock
+	$(LD) $(LDFLAGS) -T linkers/bootblock.ld -o bootblock.o bootasm.o bootmain.o
+	$(OBJDUMP) -S bootblock.o > bootblock.asm
+	$(OBJCOPY) -S -O binary bootblock.o bootblock
 
 kernel.a: $(RS)
 	cargo build -Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec \
