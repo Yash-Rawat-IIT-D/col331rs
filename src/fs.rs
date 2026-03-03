@@ -3,10 +3,10 @@ use core::cmp::min;
 use crate::bio;
 use crate::buf::BSIZE;
 use crate::log;
-use crate::param::NINODE;
+use crate::param::{NINODE, ROOTDEV};
 use crate::println;
 use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, BPB, MAXFILE};
-use crate::constants::{ROOTDEV, ROOTINO};
+use crate::constants::{ROOTINO};
 
 pub use crate::constants::T_DIR;
 
