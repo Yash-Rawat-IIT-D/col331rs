@@ -70,16 +70,3 @@ pub extern "C" fn entryofrust() -> ! {
         x86::wfi();
     }
 }
-
-static mut PANICKED: bool = false;
-
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    // Disable interrupts to prevent interrupt handlers from interfering
-    cli();
-    // Print panic message with LAPIC ID to identify which CPU panicked
-    println!("lapicid {}:\n{:#?}", lapicid(), info);
-    unsafe { PANICKED = true; }
-    // Halt the system
-    loop {}
-}
