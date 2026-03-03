@@ -35,9 +35,9 @@ const MAXFILE: usize = NDIRECT + NINDIRECT;  // max file size in blocks
 const DIRSIZ: usize = 14;             // directory name length
 
 // From param.h (System parameters)
-const FSSIZE: u32 = 10_000;           // size of file system in blocks
+const FSSIZE: u32 = 1_000;           // size of file system in blocks
 const NINODES: u32 = 200;             // number of inodes
-const LOGSIZE: u32 = 30;              // max data blocks in on-disk log
+const LOGSIZE: u32 = 0;              // max data blocks in on-disk log
 
 // From stat.h (File types)
 const T_DIR: u16 = 1;                 // Directory
