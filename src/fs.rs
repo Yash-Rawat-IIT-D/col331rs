@@ -4,15 +4,10 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::NINODE;
 use crate::println;
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DINODE_SIZE, IPB};
 
-pub const ROOTINO: u32 = 1;
-pub const NDIRECT: usize = 12;
-pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();
-pub const DIRSIZ: usize = 14;
+pub use crate::constants::ROOTINO;
 pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
-
-const DINODE_SIZE: usize = 2 + 2 + 2 + 2 + 4 + ((NDIRECT + 1) * 4);
-const IPB: u32 = (BSIZE / DINODE_SIZE) as u32;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -141,7 +136,7 @@ fn read_u32_le(data: &[u8], off: usize) -> u32 {
 
 #[inline]
 fn iblock(inum: u32, sb: &Superblock) -> u32 {
-    inum / IPB + sb.inodestart
+    inum / (IPB as u32) + sb.inodestart
 }
 
 pub fn parse_dirent(raw: &[u8]) -> Dirent {
@@ -220,7 +215,7 @@ pub fn iread(idx: usize) {
             let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
             let data = &bio::buf_mut(bp).data;
 
-            let off = (ip.inum % IPB) as usize * DINODE_SIZE;
+            let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
             ip.type_ = read_i16_le(data, off);
             ip.major = read_i16_le(data, off + 2);
             ip.minor = read_i16_le(data, off + 4);
