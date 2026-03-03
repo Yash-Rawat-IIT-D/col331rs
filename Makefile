@@ -54,12 +54,21 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
+<<<<<<< HEAD
 # Build mkfs utility and create filesystem image
 mkfs: src/mkfs.rs
 	rustc -W warnings -o mkfs src/mkfs.rs
 
 fs.img: mkfs *.txt
 	./mkfs fs.img *.txt
+=======
+# Second disk (fs.img) with welcome text (2 sectors, like C version)
+fs: fs.img
+
+fs.img: welcome.txt
+	dd if=/dev/zero of=fs.img count=2
+	dd if=welcome.txt of=fs.img conv=notrunc
+>>>>>>> p6-ide
 
 bootblock: bootasm.S bootmain.c linkers/bootblock.ld
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c

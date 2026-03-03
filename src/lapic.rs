@@ -14,14 +14,14 @@ const ESR: isize = 0x0280 / 4;
 const ICRLO: isize = 0x0300 / 4;
 
 const INIT: u32 = 0x00000500;
-const STARTUP: u32 = 0x00000600;
+// const STARTUP: u32 = 0x00000600;  // Unused in p3 - for AP startup
 const DELIVS: u32 = 0x00001000;
-const ASSERT: u32 = 0x00004000;
-const DEASSERT: u32 = 0x00000000;
+// const ASSERT: u32 = 0x00004000;    // Unused in p3 - for IPI
+// const DEASSERT: u32 = 0x00000000;  // Unused in p3 - for IPI
 const LEVEL: u32 = 0x00008000;
 const BCAST: u32 = 0x00080000;
-const BUSY: u32 = 0x00001000;
-const FIXED: u32 = 0x00000000;
+// const BUSY: u32 = 0x00001000;      // Unused in p3
+// const FIXED: u32 = 0x00000000;     // Unused in p3
 
 const ICRHI: isize = 0x0310 / 4;
 const TIMER: isize = 0x0320 / 4;
@@ -35,7 +35,7 @@ const ERROR: isize = 0x0370 / 4;
 const MASKED: u32 = 0x00010000;
 
 const TICR: isize = 0x0380 / 4;
-const TCCR: isize = 0x0390 / 4;
+// const TCCR: isize = 0x0390 / 4;  // Unused in p3 - timer current count
 const TDCR: isize = 0x03E0 / 4;
 
 // Volatile write to LAPIC
