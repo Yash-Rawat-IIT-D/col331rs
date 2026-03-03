@@ -4,9 +4,10 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::NINODE;
 use crate::println;
-use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, T_DIR};
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, BPB, MAXFILE};
 
 pub use crate::constants::ROOTINO;
+pub use crate::constants::T_DIR;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -155,7 +156,7 @@ fn iblock(inum: u32, sb: &Superblock) -> u32 {
 
 #[inline]
 fn bblock(b: u32, sb: &Superblock) -> u32 {
-    b / BPB + sb.bmapstart
+    b / (BPB as u32) + sb.bmapstart
 }
 
 #[inline]
@@ -211,12 +212,12 @@ fn balloc(dev: u32) -> u32 {
     unsafe {
         let mut b = 0u32;
         while b < SB.size {
-            let bp = bio::bread(dev, bblock(b, &SB));
+            let bp = bio::bread(dev, bblock(b, &*(&raw const SB)));
             let mut found: Option<u32> = None;
             {
                 let data = &mut bio::buf_mut(bp).data;
                 let mut bi = 0u32;
-                while bi < BPB && b + bi < SB.size {
+                while bi < (BPB as u32) && b + bi < SB.size {
                     let m: u8 = 1u8 << (bi % 8);
                     let idx = (bi / 8) as usize;
                     if (data[idx] & m) == 0 {
@@ -236,7 +237,7 @@ fn balloc(dev: u32) -> u32 {
             }
 
             bio::brelse(bp);
-            b += BPB;
+            b += BPB as u32;
         }
     }
 
@@ -247,8 +248,8 @@ pub fn ialloc(dev: u32, type_: i16) -> usize {
     unsafe {
         let mut inum = 1u32;
         while inum < SB.ninodes {
-            let bp = bio::bread(dev, iblock(inum, &SB));
-            let off = (inum % IPB) as usize * DINODE_SIZE;
+            let bp = bio::bread(dev, iblock(inum, &*(&raw const SB)));
+            let off = (inum % (IPB as u32)) as usize * DINODE_SIZE;
 
             let free = {
                 let data = &bio::buf_mut(bp).data;
@@ -293,8 +294,8 @@ pub fn iupdate(idx: usize) {
         }
 
         let ip = &ICACHE.inode[idx];
-        let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
-        let off = (ip.inum % IPB) as usize * DINODE_SIZE;
+        let bp = bio::bread(ip.dev, iblock(ip.inum, &*(&raw const SB)));
+        let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
 
         {
             let data = &mut bio::buf_mut(bp).data;
@@ -534,10 +535,8 @@ pub fn namecmp(s: &str, t: &[u8; DIRSIZ]) -> bool {
 }
 
 pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Option<usize> {
-    unsafe {
-        if dp_idx >= NINODE {
-            panic!("dirlookup: bad inode index");
-        }
+    if dp_idx >= NINODE {
+        panic!("dirlookup: bad inode index");
     }
     iread(dp_idx);
 

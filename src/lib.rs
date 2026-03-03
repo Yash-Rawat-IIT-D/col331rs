@@ -63,7 +63,7 @@ fn welcome() {
         Some(idx) => idx,
         None => {
             println!("/foo not found. Creating!");
-            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR);
+            let idx = fs::ialloc(param::ROOTDEV, fs::T_DIR as i16);
             fs::iread(idx);
             let ino = fs::inode_inum(idx);
             if fs::dirlink(idx, ".", ino) < 0 {
