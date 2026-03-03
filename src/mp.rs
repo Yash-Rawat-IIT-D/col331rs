@@ -60,7 +60,7 @@ pub struct MpIoApic {
 }
 
 // Processor flags
-pub const MPBOOT: u8 = 0x02;     // This proc is the bootstrap processor
+// pub const MPBOOT: u8 = 0x02;     // Unused in p3 - This proc is the bootstrap processor
 
 // Table entry types
 pub const MPPROC: u8 = 0x00;     // One per processor

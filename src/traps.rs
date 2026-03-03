@@ -5,7 +5,7 @@ use core::ptr::addr_of_mut;
 use crate::proc::cpuid;
 use crate::println;
 use crate::lapic::lapiceoi;
-use crate::x86::{lidt,rcr2};
+use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
 use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, SEG_KCODE, STS_IG32, STS_TG32};
 use crate::uart::uartintr;
@@ -109,6 +109,7 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 	const TIMER: u32 = T_IRQ0 + IRQ_TIMER;
 	const SPURIOUS: u32 = T_IRQ0 + IRQ_SPURIOUS;
 	const SEVEN: u32 = T_IRQ0 + 7;
+    
     match tf.trapno {
         TIMER => {
             TICKS.fetch_add(1, Ordering::Relaxed);
