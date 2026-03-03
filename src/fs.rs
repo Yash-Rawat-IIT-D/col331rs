@@ -6,8 +6,8 @@ use crate::log;
 use crate::param::NINODE;
 use crate::println;
 use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, BPB, MAXFILE};
+use crate::constants::{ROOTDEV, ROOTINO};
 
-pub use crate::constants::ROOTINO;
 pub use crate::constants::T_DIR;
 
 #[derive(Copy, Clone)]
@@ -260,7 +260,7 @@ fn bfree(dev: u32, b: u32) {
             data[idx] &= !m;
         }
 
-        bio::bwrite(bp);
+        log::log_write(bp);
         bio::brelse(bp);
     }
 }

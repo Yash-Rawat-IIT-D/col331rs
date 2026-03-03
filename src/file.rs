@@ -108,7 +108,9 @@ pub fn fileclose(f_idx: usize) {
     }
 
     if ff.type_ == FileType::Inode {
+        crate::log::begin_op();
         fs::iput(ff.ip);
+        crate::log::end_op();
     }
 }
 
@@ -188,6 +190,7 @@ pub fn filewrite(f_idx: usize, src: &[u8], n: i32) -> i32 {
                 n1 = max;
             }
 
+            crate::log::begin_op();
             fs::iread(f.ip);
             let off = unsafe { FTABLE.file[f_idx].off };
             let r = fs::writei(f.ip, &src[i as usize..], off, n1 as u32);
@@ -196,6 +199,7 @@ pub fn filewrite(f_idx: usize, src: &[u8], n: i32) -> i32 {
                     FTABLE.file[f_idx].off += r as u32;
                 }
             }
+            crate::log::end_op();
 
             if r < 0 {
                 break;
@@ -236,9 +240,14 @@ pub fn isdirempty(dp_idx: usize) -> bool {
 }
 
 pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
+    crate::log::begin_op();
+    
     let dp = match fs::nameiparent(path, name) {
         Some(idx) => idx,
-        None => return -1,
+        None => {
+            crate::log::end_op();
+            return -1;
+        }
     };
 
     fs::iread(dp);
@@ -247,6 +256,7 @@ pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
 
     if name_str == "." || name_str == ".." {
         fs::iput(dp);
+        crate::log::end_op();
         return -1;
     }
 
@@ -255,6 +265,7 @@ pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
         Some(idx) => idx,
         None => {
             fs::iput(dp);
+            crate::log::end_op();
             return -1;
         }
     };
@@ -268,6 +279,7 @@ pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
     if fs::inode_type(ip) == T_DIR && !isdirempty(ip) {
         fs::iput(ip);
         fs::iput(dp);
+        crate::log::end_op();
         return -1;
     }
 
@@ -286,10 +298,11 @@ pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
     fs::iupdate(ip);
     fs::iput(ip);
 
+    crate::log::end_op();
     0
 }
 
-pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
+fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     let mut name = [0u8; DIRSIZ];
 
     let dp = fs::nameiparent(path, &mut name)?;
@@ -332,13 +345,29 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
 }
 
 pub fn open(path: &str, omode: i32) -> Option<usize> {
+    crate::log::begin_op();
+    
     let ip = if (omode & O_CREATE) != 0 {
-        create(path, T_FILE as i16, 0, 0)?
+        let ip = match create(path, T_FILE as i16, 0, 0) {
+            Some(ip) => ip,
+            None => {
+                crate::log::end_op();
+                return None;
+            }
+        };
+        ip
     } else {
-        let ip = fs::namei(path)?;
+        let ip = match fs::namei(path) {
+            Some(ip) => ip,
+            None => {
+                crate::log::end_op();
+                return None;
+            }
+        };
         fs::iread(ip);
         if fs::inode_type(ip) == T_DIR && omode != O_RDONLY {
             fs::iput(ip);
+            crate::log::end_op();
             return None;
         }
         ip
@@ -348,6 +377,7 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
         Some(idx) => idx,
         None => {
             fs::iput(ip);
+            crate::log::end_op();
             return None;
         }
     };
@@ -361,5 +391,22 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
         f.writable = (omode & O_WRONLY) != 0 || (omode & O_RDWR) != 0;
     }
 
+    crate::log::end_op();
     Some(f_idx)
+}
+
+pub fn mkdir(path: &str) -> i32 {
+    crate::log::begin_op();
+    
+    let ip = match create(path, T_DIR as i16, 0, 0) {
+        Some(ip) => ip,
+        None => {
+            crate::log::end_op();
+            return -1;
+        }
+    };
+    
+    fs::iput(ip);
+    crate::log::end_op();
+    0
 }
