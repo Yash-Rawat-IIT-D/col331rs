@@ -163,10 +163,11 @@ pub fn readsb(dev: u32, sb: &mut Superblock) {
 
 pub fn iinit(dev: u32) {
     unsafe {
-        readsb(dev, &mut SB);
+        readsb(dev, &mut *(&raw mut SB));
+        let sb = &*(&raw const SB);
         println!(
             "sb: size {} nblocks {} ninodes {} nlog {} logstart {} inodestart {} bmap start {}",
-            SB.size, SB.nblocks, SB.ninodes, SB.nlog, SB.logstart, SB.inodestart, SB.bmapstart
+            sb.size, sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart
         );
     }
 }
@@ -212,7 +213,7 @@ pub fn iread(idx: usize) {
         }
 
         if ip.valid == 0 {
-            let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
+            let bp = bio::bread(ip.dev, iblock(ip.inum, &*(&raw const SB)));
             let data = &bio::buf_mut(bp).data;
 
             let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
