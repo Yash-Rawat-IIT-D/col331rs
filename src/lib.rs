@@ -17,7 +17,6 @@ mod mp;
 mod proc;
 mod traps;
 mod constants;  // Internal use only - no external crates
-mod fs;         // Internal use only - filesystem structures
 mod buf;
 mod bio;
 mod ide;
@@ -54,7 +53,7 @@ fn print_cstr(bytes: &[u8]) {
 }
 
 fn welcome() {
-    let _ = file::create("/foo", fs::T_DIR as i16, 0, 0);
+    let _ = file::create("/foo", constants::T_DIR as i16, 0, 0);
 
     let gtxt = file::open("/foo/hello.txt", fcntl::O_CREATE | fcntl::O_WRONLY)
         .unwrap_or_else(|| panic!("failed to create /foo/hello.txt"));
@@ -71,7 +70,7 @@ fn welcome() {
     console::consputc('\n' as i32);
     file::fileclose(gtxt);
 
-    let mut name = [0u8; fs::DIRSIZ];
+    let mut name = [0u8; constants::DIRSIZ];
     if file::unlink("/foo/hello.txt", &mut name) < 0 {
         panic!("failed to unlink /foo/hello.txt");
     }

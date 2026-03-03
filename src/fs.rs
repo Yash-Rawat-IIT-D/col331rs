@@ -246,8 +246,8 @@ fn balloc(dev: u32) -> u32 {
 
 fn bfree(dev: u32, b: u32) {
     unsafe {
-        let bp = bio::bread(dev, bblock(b, &SB));
-        let bi = b % BPB;
+        let bp = bio::bread(dev, bblock(b, &*(&raw const SB)));
+        let bi = b % (BPB as u32);
         let m: u8 = 1u8 << (bi % 8);
         let idx = (bi / 8) as usize;
 

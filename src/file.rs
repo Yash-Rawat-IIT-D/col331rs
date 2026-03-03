@@ -1,6 +1,7 @@
 use core::str;
 
 use crate::buf::BSIZE;
+use crate::constants::{T_DIR, T_FILE, DIRSIZ, DIRENT_SIZE};
 use crate::fcntl::{O_CREATE, O_RDONLY, O_RDWR, O_WRONLY};
 use crate::fs;
 use crate::param::{MAXOPBLOCKS, NFILE};
@@ -48,8 +49,8 @@ impl FTable {
 
 static mut FTABLE: FTable = FTable::new();
 
-fn dirsiz_to_str(name: &[u8; fs::DIRSIZ]) -> &str {
-    let len = name.iter().position(|&b| b == 0).unwrap_or(fs::DIRSIZ);
+fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
+    let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
     str::from_utf8(&name[..len]).unwrap_or("")
 }
 
@@ -218,23 +219,23 @@ pub fn filewrite(f_idx: usize, src: &[u8], n: i32) -> i32 {
 pub fn isdirempty(dp_idx: usize) -> bool {
     fs::iread(dp_idx);
 
-    let mut off = (2 * fs::DIRENT_SIZE) as u32;
+    let mut off = (2 * DIRENT_SIZE) as u32;
     while off < fs::inode_size(dp_idx) {
-        let mut raw = [0u8; fs::DIRENT_SIZE];
-        if fs::readi(dp_idx, &mut raw, off, fs::DIRENT_SIZE as u32) != fs::DIRENT_SIZE as i32 {
+        let mut raw = [0u8; DIRENT_SIZE];
+        if fs::readi(dp_idx, &mut raw, off, DIRENT_SIZE as u32) != DIRENT_SIZE as i32 {
             panic!("isdirempty: readi");
         }
         let de = fs::parse_dirent(&raw);
         if de.inum != 0 {
             return false;
         }
-        off += fs::DIRENT_SIZE as u32;
+        off += DIRENT_SIZE as u32;
     }
 
     true
 }
 
-pub fn unlink(path: &str, name: &mut [u8; fs::DIRSIZ]) -> i32 {
+pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
     let dp = match fs::nameiparent(path, name) {
         Some(idx) => idx,
         None => return -1,
@@ -264,18 +265,18 @@ pub fn unlink(path: &str, name: &mut [u8; fs::DIRSIZ]) -> i32 {
         panic!("unlink: nlink < 1");
     }
 
-    if fs::inode_type(ip) == fs::T_DIR && !isdirempty(ip) {
+    if fs::inode_type(ip) == T_DIR && !isdirempty(ip) {
         fs::iput(ip);
         fs::iput(dp);
         return -1;
     }
 
-    let de = [0u8; fs::DIRENT_SIZE];
-    if fs::writei(dp, &de, off, fs::DIRENT_SIZE as u32) != fs::DIRENT_SIZE as i32 {
+    let de = [0u8; DIRENT_SIZE];
+    if fs::writei(dp, &de, off, DIRENT_SIZE as u32) != DIRENT_SIZE as i32 {
         panic!("unlink: writei");
     }
 
-    if fs::inode_type(ip) == fs::T_DIR {
+    if fs::inode_type(ip) == T_DIR {
         fs::inode_dec_nlink(dp);
         fs::iupdate(dp);
     }
@@ -289,7 +290,7 @@ pub fn unlink(path: &str, name: &mut [u8; fs::DIRSIZ]) -> i32 {
 }
 
 pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
-    let mut name = [0u8; fs::DIRSIZ];
+    let mut name = [0u8; DIRSIZ];
 
     let dp = fs::nameiparent(path, &mut name)?;
     fs::iread(dp);
@@ -299,7 +300,7 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     if let Some(ip) = fs::dirlookup(dp, name_str, None) {
         fs::iput(dp);
         fs::iread(ip);
-        if type_ == fs::T_FILE && fs::inode_type(ip) == fs::T_FILE {
+        if (type_ as u16) == T_FILE && fs::inode_type(ip) == T_FILE {
             return Some(ip);
         }
         fs::iput(ip);
@@ -312,7 +313,7 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     fs::inode_set_meta(ip, major, minor, 1);
     fs::iupdate(ip);
 
-    if (type_ as u16) == fs::T_DIR {
+    if (type_ as u16) == T_DIR {
         fs::inode_inc_nlink(dp);
         fs::iupdate(dp);
 
@@ -332,11 +333,11 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
 
 pub fn open(path: &str, omode: i32) -> Option<usize> {
     let ip = if (omode & O_CREATE) != 0 {
-        create(path, fs::T_FILE, 0, 0)?
+        create(path, T_FILE as i16, 0, 0)?
     } else {
         let ip = fs::namei(path)?;
         fs::iread(ip);
-        if fs::inode_type(ip) == fs::T_DIR && omode != O_RDONLY {
+        if fs::inode_type(ip) == T_DIR && omode != O_RDONLY {
             fs::iput(ip);
             return None;
         }
