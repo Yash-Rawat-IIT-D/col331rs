@@ -4,10 +4,9 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::NINODE;
 use crate::println;
-use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DINODE_SIZE, IPB, T_DIR};
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, T_DIR};
 
 pub use crate::constants::ROOTINO;
-pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
 
 #[derive(Copy, Clone)]
 #[repr(C)]

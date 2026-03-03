@@ -129,6 +129,7 @@ pub const MAXFILE: usize = NDIRECT + NINDIRECT;  // max file size in blocks
 
 // Directory entry
 pub const DIRSIZ: usize = 14;         // directory name length
+pub const DIRENT_SIZE: usize = 2 + DIRSIZ; // sizeof(struct dirent) = 2 bytes for uint16_t + 14 bytes for name
 
 // Inode calculations
 // Note: In C these are macros. IPB = (BSIZE / sizeof(struct dinode))
