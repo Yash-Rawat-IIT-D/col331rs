@@ -1,7 +1,8 @@
 use crate::mp::MP_ONCE;  // Import the MP_ONCE static from mp.rs
 // use core::ptr;
 use crate::x86::readeflags;
-use crate::constants::{FL_IF,NCPU};
+use crate::param::{NCPU};
+use crate::constants::{FL_IF};
 use crate::lapic;
 
 #[derive(Debug, Clone, Copy)]

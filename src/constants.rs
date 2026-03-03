@@ -17,11 +17,6 @@ pub const STS_T32A: u8 = 0x9; // Available 32-bit TSS
 pub const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
 pub const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
 
-
-// ----------------------------------------------------- CPU RELATED ----------------------------------------------
-pub const KSTACKSIZE: usize = 4096; // size of per-process kernel stack
-pub const NCPU: usize = 8; // maximum number of CPUs
-
 // ----------------------------------------------- TRAPS -------------------------------------------------------
 // x86 trap and interrupt constants
 
