@@ -4,19 +4,10 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::NINODE;
 use crate::println;
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DINODE_SIZE, IPB};
 
-pub const ROOTINO: u32 = 1;
-pub const NDIRECT: usize = 12;
-pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();
-pub const DIRSIZ: usize = 14;
+pub use crate::constants::ROOTINO;
 pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
-
-pub const T_DIR: i16 = 1;  // Directory
-pub const T_FILE: i16 = 2; // File
-pub const T_DEV: i16 = 3;  // Device
-
-const DINODE_SIZE: usize = 2 + 2 + 2 + 2 + 4 + ((NDIRECT + 1) * 4);
-const IPB: u32 = (BSIZE / DINODE_SIZE) as u32;
 
 #[derive(Copy, Clone)]
 #[repr(C)]
@@ -145,7 +136,7 @@ fn read_u32_le(data: &[u8], off: usize) -> u32 {
 
 #[inline]
 fn iblock(inum: u32, sb: &Superblock) -> u32 {
-    inum / IPB + sb.inodestart
+    inum / (IPB as u32) + sb.inodestart
 }
 
 pub fn parse_dirent(raw: &[u8]) -> Dirent {
@@ -172,10 +163,11 @@ pub fn readsb(dev: u32, sb: &mut Superblock) {
 
 pub fn iinit(dev: u32) {
     unsafe {
-        readsb(dev, &mut SB);
+        readsb(dev, &mut *(&raw mut SB));
+        let sb = &*(&raw const SB);
         println!(
             "sb: size {} nblocks {} ninodes {} nlog {} logstart {} inodestart {} bmap start {}",
-            SB.size, SB.nblocks, SB.ninodes, SB.nlog, SB.logstart, SB.inodestart, SB.bmapstart
+            sb.size, sb.nblocks, sb.ninodes, sb.nlog, sb.logstart, sb.inodestart, sb.bmapstart
         );
     }
 }
@@ -232,10 +224,10 @@ pub fn iread(idx: usize) {
         }
 
         if ip.valid == 0 {
-            let bp = bio::bread(ip.dev, iblock(ip.inum, &SB));
+            let bp = bio::bread(ip.dev, iblock(ip.inum, &*(&raw const SB)));
             let data = &bio::buf_mut(bp).data;
 
-            let off = (ip.inum % IPB) as usize * DINODE_SIZE;
+            let off = (ip.inum % (IPB as u32)) as usize * DINODE_SIZE;
             ip.type_ = read_i16_le(data, off);
             ip.major = read_i16_le(data, off + 2);
             ip.minor = read_i16_le(data, off + 4);
