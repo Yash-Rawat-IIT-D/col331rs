@@ -4,7 +4,7 @@ use crate::bio;
 use crate::buf::BSIZE;
 use crate::param::NINODE;
 use crate::println;
-use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DINODE_SIZE, IPB};
+use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DINODE_SIZE, IPB, T_DIR};
 
 pub use crate::constants::ROOTINO;
 pub const DIRENT_SIZE: usize = 2 + DIRSIZ;
@@ -322,11 +322,8 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
     }
 }
 
-// =====================================================================
 // Directories
-// =====================================================================
-
-/// Compare two directory entry names (up to DIRSIZ bytes).
+/// Compare names up to DIRSIZ.
 pub fn namecmp(s: &[u8], t: &[u8]) -> bool {
     let slen = s.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(s.len()));
     let tlen = t.iter().take(DIRSIZ).position(|&b| b == 0).unwrap_or(DIRSIZ.min(t.len()));
@@ -341,16 +338,16 @@ pub fn namecmp(s: &[u8], t: &[u8]) -> bool {
     true
 }
 
-/// Look for a directory entry in a directory inode.
-/// If found, return the inode cache index of the entry.
-pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
+/// Look for a directory entry in a directory.
+/// If found, set *poff to byte offset of entry.
+pub fn dirlookup(dp_idx: usize, name: &[u8], poff: Option<&mut u32>) -> Option<usize> {
     unsafe {
         if dp_idx >= NINODE {
             panic!("dirlookup: bad inode index");
         }
 
         let dp = &ICACHE.inode[dp_idx];
-        if dp.type_ != T_DIR {
+        if (dp.type_ as u16) != T_DIR {
             panic!("dirlookup not DIR");
         }
 
@@ -371,6 +368,9 @@ pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
 
             if namecmp(name, &de.name) {
                 // entry matches path element
+                if let Some(poff_ref) = poff {
+                    *poff_ref = off;
+                }
                 let inum = de.inum as u32;
                 return Some(iget(dp.dev, inum));
             }
@@ -381,13 +381,10 @@ pub fn dirlookup(dp_idx: usize, name: &[u8]) -> Option<usize> {
     }
 }
 
-// =====================================================================
 // Paths
-// =====================================================================
 
 /// Copy the next path element from path into name.
-/// Return the remaining path after the element (with leading slashes stripped),
-/// or None if there is no element to extract.
+/// Return a pointer to the element following the copied one.
 fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
     let mut i = 0;
 
@@ -406,13 +403,11 @@ fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
     }
     let len = i - start;
 
-    // Copy element into name
     if len >= DIRSIZ {
         name.copy_from_slice(&path[start..start + DIRSIZ]);
     } else {
         name[..len].copy_from_slice(&path[start..start + len]);
         name[len] = 0;
-        // Zero out rest of name for cleanliness
         for j in (len + 1)..DIRSIZ {
             name[j] = 0;
         }
@@ -426,9 +421,8 @@ fn skipelem<'a>(path: &'a [u8], name: &mut [u8; DIRSIZ]) -> Option<&'a [u8]> {
     Some(&path[i..])
 }
 
-/// Look up and return the inode cache index for a path name.
-/// If nameiparent_flag is true, return the inode for the parent and copy
-/// the final path element into name.
+/// Look up and return the inode for a path name.
+/// If nameiparent != 0, return the inode for the parent.
 fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option<usize> {
     let mut ip = iget(crate::param::ROOTDEV, ROOTINO);
 
@@ -439,7 +433,7 @@ fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option
             Some(rest) => {
                 iread(ip);
                 unsafe {
-                    if ICACHE.inode[ip].type_ != T_DIR {
+                    if (ICACHE.inode[ip].type_ as u16) != T_DIR {
                         irelse(ip);
                         return None;
                     }
@@ -451,7 +445,7 @@ fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option
                     return Some(ip);
                 }
 
-                match dirlookup(ip, name) {
+                match dirlookup(ip, name, None) {
                     None => {
                         irelse(ip);
                         return None;
@@ -473,16 +467,14 @@ fn namex(path: &[u8], nameiparent_flag: bool, name: &mut [u8; DIRSIZ]) -> Option
     Some(ip)
 }
 
-/// Look up the inode cache index for a path name.
-/// Mirrors C: struct inode* namei(char *path)
+/// Look up the inode for a path name.
 pub fn namei(path: &[u8]) -> Option<usize> {
     let mut name = [0u8; DIRSIZ];
     namex(path, false, &mut name)
 }
 
-/// Look up the parent inode for a path name, and copy the final
-/// path element into name.
-/// Mirrors C: struct inode* nameiparent(char *path, char *name)
+/// Look up the parent inode for a path name.
+/// Copy the final path element into name.
 pub fn nameiparent(path: &[u8], name: &mut [u8; DIRSIZ]) -> Option<usize> {
     namex(path, true, name)
 }
