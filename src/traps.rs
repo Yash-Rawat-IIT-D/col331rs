@@ -47,35 +47,6 @@ impl GateDesc {
 static mut IDT: OnceCell<[GateDesc; 256]> = OnceCell::new();
 pub static TICKS: AtomicU32 = AtomicU32::new(0);
 
-
-#[repr(C)]
-pub struct TrapFrame {
-    // registers as pushed by pusha
-    pub edi: u32,
-    pub esi: u32,
-    pub ebp: u32,
-    pub oesp: u32, // useless & ignored
-    pub ebx: u32,
-    pub edx: u32,
-    pub ecx: u32,
-    pub eax: u32,
-
-    pub trapno: u32,
-
-    // below here defined by x86 hardware
-    pub err: u32,
-    pub eip: u32,
-    pub cs: u16,
-    pub padding5: u16,
-    pub eflags: u32,
-
-    // below here only when crossing rings, such as from user to kernel
-    pub esp: u32,
-    pub ss: u16,
-    pub padding6: u16,
-}
-
-
 pub fn tvinit() {
     let mut arr = [GateDesc::default(); 256];
     for i in 0..256 {

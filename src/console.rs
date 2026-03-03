@@ -35,7 +35,7 @@ static mut INPUT: Input = Input {
     e: 0,
 };
 
-fn consputc(c: i32) {
+pub fn consputc(c: i32) {
     if c == BACKSPACE {
         uartputc('\x08' as i32);
         uartputc(' ' as i32);
