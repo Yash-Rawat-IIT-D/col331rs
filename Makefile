@@ -54,12 +54,7 @@ xv6.img: bootblock kernel
 	dd if=bootblock of=xv6.img conv=notrunc
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
-mkfs: src/mkfs.rs
-	rustc -W warnings -o mkfs src/mkfs.rs
-
-fs.img: mkfs *.txt
-	./mkfs fs.img *.txt
-
+# Build mkfs utility and create filesystem image
 mkfs: src/mkfs.rs
 	rustc -W warnings -o mkfs src/mkfs.rs
 
@@ -127,6 +122,6 @@ qemu: xv6.img fs.img
 .gdbinit: .gdbinit.tmpl
 	sed "s/localhost:1234/localhost:$(GDBPORT)/" < $^ > $@
 
-qemu-gdb: xv6.img fs .gdbinit
+qemu-gdb: xv6.img .gdbinit fs.img
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)

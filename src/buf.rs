@@ -1,8 +1,10 @@
 use core::sync::atomic::AtomicU32;
 
-pub const BSIZE: usize = 512; // block size
-pub const NBUF: usize = 30;   // same as xv6 default; can tune later
+// Re-export filesystem constants from constants.rs for convenience
+// (other modules currently import BSIZE and NBUF from buf)
+pub use crate::constants::{BSIZE, NBUF};
 
+// Buffer flags
 pub const B_VALID: u32 = 0x2; // buffer has been read from disk
 pub const B_DIRTY: u32 = 0x4; // buffer needs to be written to disk
 

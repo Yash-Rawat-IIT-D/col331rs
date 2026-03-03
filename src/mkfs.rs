@@ -5,22 +5,51 @@ use std::mem::size_of;
 use std::path::Path;
 
 
-// constants to be included in constants.rs under "FILE SYSTEM" section,
-// declared here for now to avoid merge conflicts
+// ============================================================================
+// FILE SYSTEM CONSTANTS AND STRUCTURES
+// ============================================================================
+// NOTE: These definitions are duplicated from the kernel codebase.
+//
+// WHY STANDALONE?
+// In the C version, mkfs.c is compiled standalone with `gcc -o mkfs mkfs.c`
+// and shares definitions via header files (fs.h, param.h, stat.h).
+//
+// Rust cannot use header files, so we duplicate the definitions here.
+// This matches C's semantic model: mkfs is a host-side utility that runs
+// on Linux/Mac (with std) to create fs.img BEFORE the kernel boots.
+//
+// The kernel (src/*) runs bare-metal x86 (no_std) and cannot share compiled
+// code with host programs.
+//
+// MAINTENANCE: Keep synchronized with:
+// - src/constants.rs (constants)
+// - src/fs.rs (structs) - once created
+// ============================================================================
 
-const BSIZE: usize = 512;
-const FSSIZE: u32 = 10_000;
-const NINODES: u32 = 200;
-const LOGSIZE: u32 = 30;
+// From fs.h (On-disk file system format)
+const ROOTINO: u32 = 1;               // root i-number
+const BSIZE: usize = 512;             // block size
+const NDIRECT: usize = 12;            // number of direct block pointers
+const NINDIRECT: usize = BSIZE / size_of::<u32>();  // indirect pointers
+const MAXFILE: usize = NDIRECT + NINDIRECT;  // max file size in blocks
+const DIRSIZ: usize = 14;             // directory name length
 
-const ROOTINO: u32 = 1;
-const NDIRECT: usize = 12;
-const NINDIRECT: usize = BSIZE / size_of::<u32>();
-const MAXFILE: usize = NDIRECT + NINDIRECT;
-const DIRSIZ: usize = 14;
+// From param.h (System parameters)
+const FSSIZE: u32 = 10_000;           // size of file system in blocks
+const NINODES: u32 = 200;             // number of inodes
+const LOGSIZE: u32 = 30;              // max data blocks in on-disk log
 
-const T_DIR: u16 = 1;
-const T_FILE: u16 = 2;
+// From stat.h (File types)
+const T_DIR: u16 = 1;                 // Directory
+const T_FILE: u16 = 2;                // File
+
+// ============================================================================
+// FILESYSTEM STRUCTURES (Duplicated from src/fs.rs)
+// ============================================================================
+// In C: These are defined in fs.h and included by both kernel and mkfs.c
+// In Rust: Canonical definitions are in src/fs.rs (for kernel)
+//          Duplicated here because mkfs is a standalone host binary
+// ============================================================================
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]

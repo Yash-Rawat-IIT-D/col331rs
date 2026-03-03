@@ -1,5 +1,6 @@
 use core::sync::atomic::Ordering;
-use crate::buf::{BSIZE, B_DIRTY, B_VALID};
+use crate::constants::BSIZE;
+use crate::buf::{B_DIRTY, B_VALID};
 use crate::x86;
 
 const SECTOR_SIZE: usize = 512;

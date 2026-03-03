@@ -16,7 +16,8 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
-mod constants;
+mod constants;  // Internal use only - no external crates
+mod fs;         // Internal use only - filesystem structures
 mod buf;
 mod bio;
 mod ide;
@@ -41,16 +42,9 @@ fn halt() -> ! {
 }
 
 fn welcome() {
-    let b0 = bio::bread(1, 0);
-    let data0 = bio::buf_mut(b0).data;
-
-    for &byte in data0.iter() {
-        if byte == 0 { break; }
-        console::consputc(byte as i32);
-    }
-    bio::brelse(b0);
-
-    let b1 = bio::bread(1, 1);
+    // Read boot counter from block 0 of device 1 (fs.img)
+    // Changed from block 1 to block 0 to match C version (p7-mkfs)
+    let b1 = bio::bread(1, 0);
     let count = bio::buf_mut(b1).data[0];
 
     println!("\nAfter preparing fs.img, we have rebooted {} times\n", count);

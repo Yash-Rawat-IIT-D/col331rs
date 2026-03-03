@@ -114,3 +114,46 @@ pub const PERIODIC: u32 = 0x00020000;  // Periodic
 
 // Error handling
 pub const MASKED: u32 = 0x00010000;   // Interrupt masked
+
+// ------------------------------------------------------ FILE SYSTEM (fs.h) ----------------------------------------------
+// On-disk file system format constants
+// Both the kernel and user programs (mkfs) use these definitions
+
+pub const ROOTINO: u32 = 1;           // root i-number
+pub const BSIZE: usize = 512;         // block size
+
+// File structure
+pub const NDIRECT: usize = 12;        // number of direct block pointers
+pub const NINDIRECT: usize = BSIZE / core::mem::size_of::<u32>();  // number of indirect block pointers (BSIZE / sizeof(uint))
+pub const MAXFILE: usize = NDIRECT + NINDIRECT;  // max file size in blocks
+
+// Directory entry
+pub const DIRSIZ: usize = 14;         // directory name length
+
+// Inode calculations
+// Note: In C these are macros. IPB = (BSIZE / sizeof(struct dinode))
+// For Rust: sizeof(dinode) = 2+2+2+2+4+(13*4) = 64 bytes
+// So IPB = 512/64 = 8 inodes per block
+pub const DINODE_SIZE: usize = 64;    // sizeof(struct dinode)
+pub const IPB: usize = BSIZE / DINODE_SIZE;  // inodes per block
+
+// Bitmap calculations
+pub const BPB: usize = BSIZE * 8;     // bitmap bits per block
+
+// ------------------------------------------------------ SYSTEM PARAMETERS (param.h) ----------------------------------------------
+// System-wide parameters
+
+pub const MAXOPBLOCKS: usize = 10;    // max # of blocks any FS op writes
+pub const NINODE: usize = 50;         // maximum number of active i-nodes
+pub const ROOTDEV: u32 = 1;           // device number of file system root disk
+pub const LOGSIZE: u32 = 30;          // max data blocks in on-disk log (C version: 0, extended version: 30)
+pub const NBUF: usize = MAXOPBLOCKS * 3;  // size of disk block cache
+pub const FSSIZE: u32 = 10000;        // size of file system in blocks (C version: 1000, extended: 10000)
+pub const NINODES: u32 = 200;         // number of inodes in file system
+
+// ------------------------------------------------------ FILE TYPES (stat.h) ----------------------------------------------
+// File type constants for inode.type field
+
+pub const T_DIR: u16 = 1;             // Directory
+pub const T_FILE: u16 = 2;            // File
+pub const T_DEV: u16 = 3;             // Device
