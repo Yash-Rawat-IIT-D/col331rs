@@ -1,5 +1,7 @@
 use crate::uart::*;
 use core::fmt::*;
+use crate::file::DEVSW;
+use crate::param::CONSOLE;
 pub struct Console {}
 
 impl Write for Console {
@@ -80,5 +82,62 @@ pub fn consoleintr(getc: fn() -> i32) {
                 }
             }
         }
+    }
+}
+
+pub fn consoleread(_ip: usize, dst: &mut [u8], n: i32) -> i32 {
+    let target = n;
+    let mut n = n;
+
+    unsafe {
+        let input = &raw mut INPUT;
+        while n > 0 {
+            // Busy wait for input - mirrors C: while(input.r == input.w);
+            while (*input).r == (*input).w {
+                // Block until data is available
+            }
+            
+            // Read character and increment read pointer - mirrors C: input.buf[input.r++ % INPUT_BUF]
+            let c = (*input).buf[(*input).r % INPUT_BUF] as i32;
+            (*input).r += 1;
+            
+            // Handle EOF (Ctrl-D)
+            if c == CTRL_D {
+                if n < target {
+                    // Save ^D for next time, to make sure
+                    // caller gets a 0-byte result.
+                    (*input).r -= 1;
+                }
+                break;
+            }
+            
+            // Copy character to destination - mirrors C: *dst++ = c;
+            dst[(target - n) as usize] = c as u8;
+            n -= 1;
+            
+            // Break on newline
+            if c == '\n' as i32 {
+                break;
+            }
+        }
+    }
+
+    target - n
+}
+
+pub fn consolewrite(_ip: usize, src: &[u8], n: i32) -> i32 {
+    // Mirrors C: for(i = 0; i < n; i++) consputc(buf[i] & 0xff);
+    for i in 0..n {
+        consputc(src[i as usize] as i32);
+    }
+    n
+}
+
+pub fn consoleinit() {
+    // Register console device handlers in the device switch table
+    // Mirrors C: devsw[CONSOLE].write = consolewrite; devsw[CONSOLE].read = consoleread;
+    unsafe {
+        DEVSW[CONSOLE].read  = Some(consoleread);
+        DEVSW[CONSOLE].write = Some(consolewrite);
     }
 }

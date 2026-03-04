@@ -3,10 +3,11 @@ use core::cmp::min;
 use crate::bio;
 use crate::buf::BSIZE;
 use crate::log;
-use crate::param::{NINODE, ROOTDEV};
+use crate::param::{NINODE, ROOTDEV, NDEV};
 use crate::println;
 use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, BPB, MAXFILE};
-use crate::constants::{ROOTINO};
+use crate::constants::{ROOTINO, T_DEV};
+use crate::file::DEVSW;
 
 pub use crate::constants::T_DIR;
 
@@ -516,6 +517,15 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
         }
 
         let ip = &ICACHE.inode[idx];
+        
+        // Handle device files
+        if ip.type_ == T_DEV as i16 {
+            if ip.major < 0 || (ip.major as usize) >= NDEV || DEVSW[ip.major as usize].read.is_none() {
+                return -1;
+            }
+            return DEVSW[ip.major as usize].read.unwrap()(idx, dst, n as i32);
+        }
+        
         if off > ip.size || off.checked_add(n).is_none() || ip.nlink < 1 {
             return -1;
         }
@@ -557,6 +567,15 @@ pub fn writei(idx: usize, src: &[u8], off: u32, n: u32) -> i32 {
         }
 
         let ip = &ICACHE.inode[idx];
+        
+        // Handle device files
+        if ip.type_ == T_DEV as i16 {
+            if ip.major < 0 || (ip.major as usize) >= NDEV || DEVSW[ip.major as usize].write.is_none() {
+                return -1;
+            }
+            return DEVSW[ip.major as usize].write.unwrap()(idx, src, n as i32);
+        }
+        
         if off > ip.size || off.checked_add(n).is_none() {
             return -1;
         }
