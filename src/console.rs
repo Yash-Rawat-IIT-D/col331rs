@@ -76,6 +76,7 @@ pub fn consoleintr(getc: fn() -> i32) {
                         (*input).e += 1;
                         consputc(c);
                         if c == '\n' as i32 || c == CTRL_D || (*input).e == (*input).r + INPUT_BUF {
+                            // call myproc with the buf
                             (*input).w = (*input).e;
                         } 
                     }

@@ -1,4 +1,4 @@
-use crate::constants::{SEG_KCODE, SEG_KDATA, SEG_UCODE, SEG_UDATA, STA_X, STA_W, STA_R, STARTPROC, PROCSIZE};
+use crate::constants::{SEG_KCODE, SEG_KDATA, SEG_UCODE, SEG_UDATA, STA_X, STA_W, STA_R, STARTPROC, PROCSIZE, DPL_USER};
 use crate::mmu::SegDesc;
 use crate::proc::cpuid;
 use crate::mp::MP_ONCE;
@@ -16,8 +16,8 @@ pub fn seginit() {
         
         c.gdt[SEG_KCODE as usize] = SegDesc::seg(STA_X | STA_R, 0, 0xffffffff, 0);
         c.gdt[SEG_KDATA as usize] = SegDesc::seg(STA_W, 0, 0xffffffff, 0);
-        c.gdt[SEG_UCODE as usize] = SegDesc::seg(STA_X | STA_R, STARTPROC, PROCSIZE, 0);
-        c.gdt[SEG_UDATA as usize] = SegDesc::seg(STA_W, STARTPROC, PROCSIZE, 0);
+        c.gdt[SEG_UCODE as usize] = SegDesc::seg(STA_X | STA_R, STARTPROC, PROCSIZE << 12, DPL_USER);
+        c.gdt[SEG_UDATA as usize] = SegDesc::seg(STA_W, STARTPROC, PROCSIZE << 12, DPL_USER);
         lgdt(&c.gdt, size_of_val(&c.gdt));
     }
 }

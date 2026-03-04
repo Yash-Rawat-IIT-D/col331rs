@@ -139,6 +139,42 @@ pub fn rcr2() -> u32 {
     }
 }
 
+pub fn stosb(addr: *mut u8, data: u8, cnt: usize) {
+    unsafe {
+        asm!(
+            "cld",
+            "rep stosb",
+            inout("edi") addr => _,
+            inout("ecx") cnt => _,
+            in("al") data,
+            options(nostack)
+        );
+    }
+}
+
+pub fn stosl(addr: *mut u32, data: u32, cnt: usize) {
+    unsafe {
+        asm!(
+            "cld",
+            "rep stosl",
+            inout("edi") addr => _,
+            inout("ecx") cnt => _,
+            in("eax") data,
+            options(nostack)
+        );
+    }
+}
+
+pub fn loadgs(v: u16) {
+    unsafe {
+        asm!(
+            "mov gs, {0:x}",
+            in(reg) v,
+            options(nomem, nostack)
+        );
+    }
+}
+
 #[repr(C)]
 pub struct TrapFrame {
     // registers as pushed by pusha
@@ -151,6 +187,15 @@ pub struct TrapFrame {
     pub ecx: u32,
     pub eax: u32,
 
+    // segment registers
+    pub gs: u16,
+    pub padding1: u16,
+    pub fs: u16,
+    pub padding2: u16,
+    pub es: u16,
+    pub padding3: u16,
+    pub ds: u16,
+    pub padding4: u16,
     pub trapno: u32,
 
     // below here defined by x86 hardware
@@ -164,4 +209,37 @@ pub struct TrapFrame {
     pub esp: u32,
     pub ss: u16,
     pub padding6: u16,
+}
+
+// Page table/directory helper functions
+use crate::constants::{PDXSHIFT, PTXSHIFT};
+
+// Extract page directory index from virtual address
+#[inline]
+pub fn pdx(va: u32) -> usize {
+    ((va >> PDXSHIFT) & 0x3FF) as usize
+}
+
+// Extract page table index from virtual address
+#[inline]
+pub fn ptx(va: u32) -> usize {
+    ((va >> PTXSHIFT) & 0x3FF) as usize
+}
+
+// Construct virtual address from page directory index, page table index, and offset
+#[inline]
+pub fn pgaddr(d: u32, t: u32, o: u32) -> u32 {
+    (d << PDXSHIFT) | (t << PTXSHIFT) | o
+}
+
+// Extract address from page table entry
+#[inline]
+pub fn pte_addr(pte: u32) -> u32 {
+    pte & !0xFFF
+}
+
+// Extract flags from page table entry
+#[inline]
+pub fn pte_flags(pte: u32) -> u32 {
+    pte & 0xFFF
 }

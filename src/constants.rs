@@ -15,15 +15,39 @@ pub const SEG_TSS: u16 = 5;   // this process's task state
 // cpu->gdt[NSEGS] holds the above segments.
 pub const NSEGS: usize = 6;
 
+// Privilege level
+pub const DPL_USER: u8 = 0x3; // User DPL
+
 // Application segment type bits
 pub const STA_X: u8 = 0x8;     // Executable segment
 pub const STA_W: u8 = 0x2;     // Writeable (non-executable segments)
 pub const STA_R: u8 = 0x2;     // Readable (executable segments)
 
 // Memory layout
+pub const EXTMEM: u32 = 0x100000;      // Start of extended memory
+pub const PHYSTOP: u32 = 0xE000000;    // Top physical memory
+pub const DEVSPACE: u32 = 0xFE000000;  // Other devices are at high addresses
+
+// Key addresses for address space layout
+pub const KERNBASE: u32 = 0x0;              // First kernel virtual address
+pub const KERNLINK: u32 = KERNBASE + EXTMEM; // Address where kernel is linked
+
 // We assume that kernel.asm can fit in first 2MB
 pub const STARTPROC: u32 = 0x200000;  // Start allocating process from here (2MB)
-pub const PROCSIZE: u32 = 0x100000;   // Size of each process (1MB)
+pub const PROCSIZE: u32 = 0x100;      // 1MB is the size of each process (in multiple of 4KB)
+
+// Page table constants
+pub const PGSIZE: u32 = 4096; // bytes mapped by a page
+pub const NPDENTRIES: usize = 1024;   // # directory entries per page directory
+pub const NPTENTRIES: usize = 1024;   // # PTEs per page table
+pub const PTXSHIFT: u32 = 12;         // offset of PTX in a linear address
+pub const PDXSHIFT: u32 = 22;         // offset of PDX in a linear address
+
+// Page table/directory entry flags
+pub const PTE_P: u32 = 0x001;   // Present
+pub const PTE_W: u32 = 0x002;   // Writeable
+pub const PTE_U: u32 = 0x004;   // User
+pub const PTE_PS: u32 = 0x080;  // Page Size
 
 // System segment type bits
 pub const STS_T32A: u8 = 0x9; // Available 32-bit TSS

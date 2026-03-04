@@ -1,29 +1,238 @@
-use crate::mp::MP_ONCE;  // Import the MP_ONCE static from mp.rs
-// use core::ptr;
-use crate::constants::NSEGS;
+use crate::mp::MP_ONCE;
+use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE, STARTPROC, PROCSIZE};
 use crate::mmu::SegDesc;
+use crate::x86::TrapFrame;
+use crate::param::NPROC;
+use core::ptr::null_mut;
+use core::cell::OnceCell;
+
+// Saved registers for kernel context switches.
+// Don't need to save all the segment registers (%cs, etc),
+// because they are constant across kernel contexts.
+// Don't need to save %eax, %ecx, %edx, because the
+// x86 convention is that the caller has saved them.
+// Contexts are stored at the bottom of the stack they
+// describe; the stack pointer is the address of the context.
+// The layout of the context matches the layout of the stack in swtch.S
+// at the "Switch stacks" comment. Switch doesn't save eip explicitly,
+// but it is on the stack and allocproc() manipulates it.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Context {
+    pub edi: u32,
+    pub esi: u32,
+    pub ebx: u32,
+    pub ebp: u32,
+    pub eip: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcState {
+    Unused,
+    Embryo,
+    Runnable,
+    Running,
+}
+
+// Per-process state
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Proc {
+    pub kstack: *mut u8,              // Bottom of kernel stack for this process (unused for now)
+    pub state: ProcState,             // Process state
+    pub pid: i32,                     // Process ID
+    pub parent: *mut Proc,            // Parent process
+    pub tf: *mut TrapFrame,           // Trap frame for current syscall
+    pub context: *mut Context,        // swtch() here to run process
+    pub cwd: usize,                   // Current directory (inode number)
+    pub name: [u8; 16],               // Process name (debugging)
+}
+
+impl Proc {
+    pub const fn new() -> Self {
+        Self {
+            kstack: null_mut(),
+            state: ProcState::Unused,
+            pid: 0,
+            parent: null_mut(),
+            tf: null_mut(),
+            context: null_mut(),
+            cwd: 0,
+            name: [0; 16],
+        }
+    }
+}
+
+// Process table
+struct PTable {
+    proc: [Proc; NPROC],
+}
+
+static mut PTABLE: OnceCell<PTable> = OnceCell::new();
+static mut NEXTPID: i32 = 1;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu {
-    pub apicid: u8,  // Local APIC ID
-    pub gdt: [SegDesc; NSEGS],   // x86 global descriptor table
+    pub apicid: u8,                   // Local APIC ID
+    pub scheduler: *mut Context,      // swtch() here to enter scheduler
+    pub gdt: [SegDesc; NSEGS],        // x86 global descriptor table
+    pub proc: *mut Proc,              // The process running on this cpu or null
 }
 
 impl Cpu {
     pub const fn new() -> Self {
         Self { 
             apicid: 0,
+            scheduler: null_mut(),
             gdt: [SegDesc::new(); NSEGS],
+            proc: null_mut(),
         }
     }
 }
 
 pub fn cpuid() -> usize {
-    let cpus = MP_ONCE.cpus.get().expect("CPUs not initialized");
-    unsafe { (mycpu() as *const Cpu).offset_from(cpus.as_ptr()) as usize }
+    // For now, always return 0 (single CPU)
+    0
 }
 
-pub fn mycpu() -> &'static Cpu {
+pub fn mycpu() -> &'static mut Cpu {
     let cpus = MP_ONCE.cpus.get().expect("CPUs not initialized");
-    &cpus[0]
+    unsafe { &mut *(cpus.as_ptr() as *mut Cpu).add(cpuid()) }
+}
+
+// Read proc from the cpu structure
+pub fn myproc() -> Option<&'static mut Proc> {
+    let c = mycpu();
+    if c.proc.is_null() {
+        None
+    } else {
+        Some(unsafe { &mut *c.proc })
+    }
+}
+
+// External symbols from assembly
+extern "C" {
+    fn trapret();
+    pub fn swtch(context: *mut Context);
+}
+
+// Look in the process table for an UNUSED proc.
+// If found, change state to EMBRYO and initialize
+// state required to run in the kernel.
+// Otherwise return None.
+fn allocproc() -> Option<&'static mut Proc> {
+    unsafe {
+        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
+        
+        if (*ptable_ptr).get().is_none() {
+            let _ = (*ptable_ptr).set(PTable {
+                proc: [Proc::new(); NPROC],
+            });
+        }
+        
+        let ptable = (*ptable_ptr).get_mut().unwrap();
+        
+        for p in &mut ptable.proc {
+            if p.state == ProcState::Unused {
+                // Found an unused process
+                p.state = ProcState::Embryo;
+                p.pid = NEXTPID;
+                NEXTPID += 1;
+                
+                // Calculate stack pointer at the end of process memory
+                let sp = (STARTPROC + (PROCSIZE << 12)) as *mut u8;
+                
+                // Leave room for trap frame
+                let sp = sp.sub(core::mem::size_of::<TrapFrame>());
+                p.tf = sp as *mut TrapFrame;
+                
+                // Leave room for context
+                let sp = sp.sub(core::mem::size_of::<Context>());
+                p.context = sp as *mut Context;
+                
+                // Initialize context
+                core::ptr::write_bytes(p.context, 0, 1);
+                (*p.context).eip = trapret as *const () as usize as u32;
+                
+                return Some(p);
+            }
+        }
+        
+        None
+    }
+}
+
+// Set up first process.
+pub fn pinit() {
+    unsafe {
+        extern "C" {
+            static _binary_initcode_start: u8;
+            static _binary_initcode_size: usize;
+        }
+        
+        let p = allocproc().expect("Failed to allocate first process");
+        
+        // Copy initcode binary to STARTPROC
+        let dst = STARTPROC as *mut u8;
+        let src = &_binary_initcode_start as *const u8;
+        let size = &_binary_initcode_size as *const usize as usize;
+        core::ptr::copy_nonoverlapping(src, dst, size);
+        
+        // Initialize trapframe
+        core::ptr::write_bytes(p.tf, 0, 1);
+        
+        (*p.tf).cs = ((SEG_UCODE << 3) | DPL_USER as u16) as u16;
+        (*p.tf).ds = ((SEG_UDATA << 3) | DPL_USER as u16) as u16;
+        (*p.tf).es = (*p.tf).ds;
+        (*p.tf).ss = (*p.tf).ds;
+        (*p.tf).eflags = FL_IF;
+        (*p.tf).esp = PGSIZE;
+        (*p.tf).eip = 0; // beginning of initcode.S
+        
+        // Set process name
+        let name = b"initcode";
+        for (i, &byte) in name.iter().enumerate() {
+            p.name[i] = byte;
+        }
+        
+        // Set current working directory to root
+        p.cwd = crate::fs::namei("/").expect("Failed to find root directory");
+        
+        p.state = ProcState::Runnable;
+    }
+}
+
+// Process scheduler.
+// Scheduler never returns. It loops, doing:
+//  - choose a process to run
+//  - swtch to start running that process
+pub fn scheduler() -> ! {
+    let c = mycpu();
+    c.proc = null_mut();
+    
+    loop {
+        // Enable interrupts on this processor.
+        crate::x86::sti();
+        
+        // Loop over process table looking for process to run.
+        unsafe {
+            let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
+            let ptable = (*ptable_ptr).get_mut().expect("Process table not initialized");
+            
+            for p in &mut ptable.proc {
+                if p.state != ProcState::Runnable {
+                    continue;
+                }
+                
+                // Switch to chosen process.
+                c.proc = p as *mut Proc;
+                p.state = ProcState::Running;
+                
+                swtch(p.context);
+                
+                // Process is done running for now.
+                c.proc = null_mut();
+            }
+        }
+    }
 }

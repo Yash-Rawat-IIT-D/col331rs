@@ -1,4 +1,4 @@
-OBJS = entry.o vectors.o trapasm.o
+OBJS = entry.o vectors.o trapasm.o swtch.o
 RS = src/*.rs
 
 # Cross-compiling (e.g., on Mac OS X)
@@ -70,6 +70,12 @@ bootblock: bootasm.S bootmain.c linkers/bootblock.ld
 	$(OBJDUMP) -S bootblock.o > bootblock.asm
 	$(OBJCOPY) -S -O binary bootblock.o bootblock
 
+initcode: initcode.S
+	$(CC) $(CFLAGS) -nostdinc -I. -c initcode.S
+	$(LD) $(LDFLAGS) -N -e start -Ttext 0 -o initcode.out initcode.o
+	$(OBJCOPY) -S -O binary initcode.out initcode
+	$(OBJDUMP) -S initcode.o > initcode.asm
+
 kernel.a: $(RS)
 	cargo build -Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec \
 	  --target ./targets/i686.json --release
@@ -79,8 +85,8 @@ kernel.a: $(RS)
 	cp "$$lib" kernel.a
 
 
-kernel: kernel.a $(OBJS) ./linkers/kernel.ld
-	$(LD) -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a
+kernel: kernel.a $(OBJS) ./linkers/kernel.ld initcode
+	$(LD) -m elf_i386 -T ./linkers/kernel.ld -o kernel $(OBJS) kernel.a -b binary initcode
 	$(OBJDUMP) -S -D kernel > kernel.asm
 	$(OBJDUMP) -t kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > kernel.sym
 
