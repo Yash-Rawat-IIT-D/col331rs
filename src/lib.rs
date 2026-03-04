@@ -64,8 +64,9 @@ fn welcome() {
             panic!("Failed to open console");
         }
     };
-    
-    let n = file::filewrite(c, b"\nEnter your name: ", 18);
+
+    let enter_message = b"\nEnter your name: ";
+    file::filewrite(c, enter_message, enter_message.len() as i32);
     
     let mut name = [0u8; 20];
     let nice_message = b"Nice to meet you! ";

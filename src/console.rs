@@ -1,4 +1,4 @@
-use crate::{println, uart::*};
+use crate::{uart::*};
 use core::fmt::*;
 use crate::file::DEVSW;
 use crate::param::CONSOLE;
@@ -71,7 +71,6 @@ pub fn consoleintr(getc: fn() -> i32) {
                 }
                 _ => {
                     if c != 0 && (*input).e.wrapping_sub((*input).r) < INPUT_BUF {
-                        let orig_c = c;
                         let c = if c == '\r' as i32 { '\n' as i32 } else { c };
                         (*input).buf[(*input).e % INPUT_BUF] = c as u8;
                         (*input).e += 1;
@@ -89,7 +88,7 @@ pub fn consoleintr(getc: fn() -> i32) {
 pub fn consoleread(_ip: usize, dst: &mut [u8], n: i32) -> i32 {
     let target = n;
     let mut n = n;
-    
+
     unsafe {
         let input = &raw mut INPUT;
         while n > 0 {
