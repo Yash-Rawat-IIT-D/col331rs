@@ -54,17 +54,26 @@ fn print_cstr(bytes: &[u8]) {
 }
 
 fn welcome() {
-    let c = file::open("console", fcntl::O_RDWR)
-        .unwrap_or_else(|| panic!("Failed to open console"));
+    // Use println! to verify we reach this point (goes via Console::Write, not file)
+   
+    let c = match file::open("/console", fcntl::O_RDWR) {
+        Some(fd) => {
+            fd
+        }
+        None => {
+            panic!("Failed to open console");
+        }
+    };
     
-    file::filewrite(c, b"\nEnter your name: ", 18);
+    let n = file::filewrite(c, b"\nEnter your name: ", 18);
     
     let mut name = [0u8; 20];
+    let nice_message = b"Nice to meet you! ";
+    let bye_message = b"BYE!\n";
     let namelen = file::fileread(c, &mut name, 20);
-    
-    file::filewrite(c, b"Nice to meet you! ", 18);
+    file::filewrite(c, nice_message, nice_message.len() as i32);
     file::filewrite(c, &name[..namelen as usize], namelen);
-    file::filewrite(c, b"BYE!\n", 6);
+    file::filewrite(c, bye_message, bye_message.len() as i32); // Goodbye message is 5 bytes not 6 (Rust vs C string handling)
     
     file::fileclose(c);
 }
@@ -88,7 +97,7 @@ pub extern "C" fn entryofrust() -> ! {
     x86::sti();
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
-    file::mknod("console", param::CONSOLE as i16, param::CONSOLE as i16);
+    file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     welcome();
 
     loop {

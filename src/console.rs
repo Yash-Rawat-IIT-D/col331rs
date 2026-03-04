@@ -1,4 +1,4 @@
-use crate::uart::*;
+use crate::{println, uart::*};
 use core::fmt::*;
 use crate::file::DEVSW;
 use crate::param::CONSOLE;
@@ -71,13 +71,14 @@ pub fn consoleintr(getc: fn() -> i32) {
                 }
                 _ => {
                     if c != 0 && (*input).e.wrapping_sub((*input).r) < INPUT_BUF {
+                        let orig_c = c;
                         let c = if c == '\r' as i32 { '\n' as i32 } else { c };
                         (*input).buf[(*input).e % INPUT_BUF] = c as u8;
                         (*input).e += 1;
                         consputc(c);
                         if c == '\n' as i32 || c == CTRL_D || (*input).e == (*input).r + INPUT_BUF {
                             (*input).w = (*input).e;
-                        }
+                        } 
                     }
                 }
             }
@@ -88,15 +89,16 @@ pub fn consoleintr(getc: fn() -> i32) {
 pub fn consoleread(_ip: usize, dst: &mut [u8], n: i32) -> i32 {
     let target = n;
     let mut n = n;
-
+    
     unsafe {
         let input = &raw mut INPUT;
         while n > 0 {
             // Busy wait for input - mirrors C: while(input.r == input.w);
-            while (*input).r == (*input).w {
-                // Block until data is available
+            while core::ptr::read_volatile(&(*input).r) == core::ptr::read_volatile(&(*input).w) {
+                // Spin-wait (busy wait) for input to arrive
+                core::hint::spin_loop();
             }
-            
+
             // Read character and increment read pointer - mirrors C: input.buf[input.r++ % INPUT_BUF]
             let c = (*input).buf[(*input).r % INPUT_BUF] as i32;
             (*input).r += 1;
