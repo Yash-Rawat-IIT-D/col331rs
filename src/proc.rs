@@ -1,18 +1,20 @@
 use crate::mp::MP_ONCE;  // Import the MP_ONCE static from mp.rs
 // use core::ptr;
-use crate::x86::readeflags;
-use crate::param::{NCPU};
-use crate::constants::{FL_IF};
-use crate::lapic;
+use crate::constants::NSEGS;
+use crate::mmu::SegDesc;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu {
     pub apicid: u8,  // Local APIC ID
+    pub gdt: [SegDesc; NSEGS],   // x86 global descriptor table
 }
 
 impl Cpu {
     pub const fn new() -> Self {
-        Self { apicid: 0 }
+        Self { 
+            apicid: 0,
+            gdt: [SegDesc::new(); NSEGS],
+        }
     }
 }
 
@@ -22,23 +24,6 @@ pub fn cpuid() -> usize {
 }
 
 pub fn mycpu() -> &'static Cpu {
-    let apicid: usize;
-    let mut i: usize = 0;
-
-    if readeflags() & FL_IF != 0 {
-        panic!("mycpu called with interrupts enabled\n");
-    }
-
-    apicid = lapic::lapicid() as usize;
-
-    // Access the cpus array via MP_ONCE
     let cpus = MP_ONCE.cpus.get().expect("CPUs not initialized");
-
-    while i < NCPU {
-        if (cpus[i].apicid as usize) == apicid {
-            return &cpus[i];
-        }
-        i += 1;
-    }
-    panic!("unknown apicid\n");
+    &cpus[0]
 }

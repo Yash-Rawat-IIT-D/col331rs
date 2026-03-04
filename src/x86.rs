@@ -1,5 +1,7 @@
 use core::arch::asm;
 use crate::traps::GateDesc;
+use crate::mmu::SegDesc;
+use crate::constants::NSEGS;
 
 pub fn inb(port: u16) -> u8 {
     let result: u8;
@@ -36,17 +38,6 @@ pub fn outw(port: u16, value: u16) {
     }
 }
 
-pub fn readeflags() -> u32 {
-    unsafe {
-        let eflags: u32;
-        asm!(
-            "pushfd; pop eax",
-            out("eax") eflags,
-            options(nomem, nostack)
-        );
-        eflags
-    }
-}
 
 pub fn cli () {
     unsafe {
@@ -69,6 +60,21 @@ pub fn lidt(gdt: *const [GateDesc; 256], size: usize) {
     unsafe { 
         asm!(
             "lidt [{0:e}]",
+            in(reg) (&pd as *const _ ) as u32,
+            options(nostack, readonly)
+        );
+    }
+}
+
+pub fn lgdt(gdt: *const [SegDesc; NSEGS], size: usize) {
+    let pd: [u16; 3] = [
+        (size - 1) as u16,
+        (gdt as *const _) as u16,
+        ((gdt as *const _ as u32) >> 16) as u16,
+    ];
+    unsafe { 
+        asm!(
+            "lgdt [{0:e}]",
             in(reg) (&pd as *const _ ) as u32,
             options(nostack, readonly)
         );
