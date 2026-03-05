@@ -48,6 +48,7 @@ pub fn consputc(c: i32) {
 }
 
 pub fn consoleintr(getc: fn() -> i32) {
+    let mut doprocdump = false;
     loop {
         let c = getc();
         if c < 0 {
@@ -57,6 +58,10 @@ pub fn consoleintr(getc: fn() -> i32) {
         unsafe {
             let input = &raw mut INPUT;
             match c {
+                x if x == C('P') => {
+                    // procdump() may indirectly use console output; call after loop
+                    doprocdump = true;
+                }
                 x if x == C('U') => {
                     while (*input).e != (*input).w && (*input).buf[((*input).e - 1) % INPUT_BUF] != b'\n' {
                         (*input).e -= 1;
@@ -83,6 +88,9 @@ pub fn consoleintr(getc: fn() -> i32) {
                 }
             }
         }
+    }
+    if doprocdump {
+        crate::proc::procdump();
     }
 }
 

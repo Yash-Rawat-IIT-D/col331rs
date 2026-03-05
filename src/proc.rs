@@ -1,7 +1,8 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE, STARTPROC, PROCSIZE};
-use crate::mmu::SegDesc;
+use crate::mmu::{SegDesc, TaskState};
 use crate::x86::TrapFrame;
+use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
 use core::ptr::null_mut;
 use core::cell::OnceCell;
@@ -75,7 +76,10 @@ static mut NEXTPID: i32 = 1;
 pub struct Cpu {
     pub apicid: u8,                   // Local APIC ID
     pub scheduler: *mut Context,      // swtch() here to enter scheduler
+    pub ts: TaskState,                // Used by x86 to find stack for interrupt
     pub gdt: [SegDesc; NSEGS],        // x86 global descriptor table
+    pub ncli: i32,                    // Depth of pushcli nesting.
+    pub intena: bool,                 // Were interrupts enabled before pushcli?
     pub proc: *mut Proc,              // The process running on this cpu or null
 }
 
@@ -84,7 +88,10 @@ impl Cpu {
         Self { 
             apicid: 0,
             scheduler: null_mut(),
+            ts: TaskState::new(),
             gdt: [SegDesc::new(); NSEGS],
+            ncli: 0,
+            intena: false,
             proc: null_mut(),
         }
     }
@@ -141,6 +148,7 @@ fn allocproc() -> Option<&'static mut Proc> {
                 
                 // Calculate stack pointer at the end of process memory
                 let sp = (STARTPROC + (PROCSIZE << 12)) as *mut u8;
+                p.kstack = sp.sub(KSTACKSIZE);
                 
                 // Leave room for trap frame
                 let sp = sp.sub(core::mem::size_of::<TrapFrame>());
@@ -227,12 +235,36 @@ pub fn scheduler() -> ! {
                 // Switch to chosen process.
                 c.proc = p as *mut Proc;
                 p.state = ProcState::Running;
-                
+                crate::vm::switchuvm(c.proc);
                 swtch(p.context);
                 
                 // Process is done running for now.
                 c.proc = null_mut();
             }
+        }
+    }
+}
+
+pub fn procdump() {
+    unsafe {
+        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
+        if (*ptable_ptr).get().is_none() {
+            return;
+        }
+        let ptable = (*ptable_ptr).get().unwrap();
+        for p in &ptable.proc {
+            if p.state == ProcState::Unused {
+                continue;
+            }
+            let state = match p.state {
+                ProcState::Unused => "unused",
+                ProcState::Embryo => "embryo",
+                ProcState::Runnable => "runble",
+                ProcState::Running => "run   ",
+            };
+            let name_len = p.name.iter().position(|&b| b == 0).unwrap_or(p.name.len());
+            let name = core::str::from_utf8(&p.name[..name_len]).unwrap_or("???");
+            crate::println!("{} {} {}", p.pid, state, name);
         }
     }
 }
