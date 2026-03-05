@@ -25,6 +25,7 @@ pub const STA_R: u8 = 0x2;     // Readable (executable segments)
 
 // Memory layout
 pub const EXTMEM: u32 = 0x100000;      // Start of extended memory
+pub const PHYSTART: u32 = EXTMEM + PROCSIZE;
 pub const PHYSTOP: u32 = 0xE000000;    // Top physical memory
 pub const DEVSPACE: u32 = 0xFE000000;  // Other devices are at high addresses
 
@@ -37,11 +38,16 @@ pub const STARTPROC: u32 = 0x200000;  // Start allocating process from here (2MB
 pub const PROCSIZE: u32 = 0x100;      // 1MB is the size of each process (in multiple of 4KB)
 
 // Page table constants
-pub const PGSIZE: u32 = 4096; // bytes mapped by a page
+pub const PGSIZE: u32 = PROCSIZE << 12; // Process allocation granularity in bytes
 pub const NPDENTRIES: usize = 1024;   // # directory entries per page directory
 pub const NPTENTRIES: usize = 1024;   // # PTEs per page table
 pub const PTXSHIFT: u32 = 12;         // offset of PTX in a linear address
 pub const PDXSHIFT: u32 = 22;         // offset of PDX in a linear address
+
+#[inline]
+pub const fn pgroundup(sz: usize) -> usize {
+    (sz + PGSIZE as usize - 1) & !(PGSIZE as usize - 1)
+}
 
 // Page table/directory entry flags
 pub const PTE_P: u32 = 0x001;   // Present
