@@ -2,7 +2,7 @@ use modular_bitfield::prelude::*;
 use core::cell::OnceCell;
 use core::sync::atomic::{AtomicU32, Ordering};
 use core::ptr::addr_of_mut;
-use crate::proc::cpuid;
+use crate::proc::{cpuid, myproc, ProcState};
 use crate::println;
 use crate::lapic::lapiceoi;
 use crate::x86::{lidt, rcr2, TrapFrame};
@@ -104,14 +104,24 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
         }
 
 		_ => {
-			println!(
-				"unexpected trap {} from cpu {} eip {} (cr2=0x{:x})\n",
-				tf.trapno,
-				cpuid(),
-				tf.eip,
-				rcr2()
-			);
-			panic!("trap happened");
+            if myproc().is_none() || (tf.cs & 3) == 0 {
+                println!(
+                    "unexpected trap {} from cpu {} eip {} (cr2=0x{:x})\n",
+                    tf.trapno,
+                    cpuid(),
+                    tf.eip,
+                    rcr2()
+                );
+                panic!("trap happened");
+            }
 		}
 	}
+
+    if tf.trapno == TIMER {
+        if let Some(p) = myproc() {
+            if p.state == ProcState::Running {
+                crate::proc::r#yield();
+            }
+        }
+    }
 }

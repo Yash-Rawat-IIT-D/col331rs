@@ -123,7 +123,7 @@ pub fn myproc() -> Option<&'static mut Proc> {
 // External symbols from assembly
 extern "C" {
     fn trapret();
-    pub fn swtch(context: *mut Context);
+    pub fn swtch(old: *mut *mut Context, new: *mut Context);
 }
 
 // Look in the process table for an UNUSED proc.
@@ -223,6 +223,8 @@ pub fn pinit() {
 // Scheduler never returns. It loops, doing:
 //  - choose a process to run
 //  - swtch to start running that process
+//  - eventually that process transfers control
+//      via swtch back to the scheduler.
 pub fn scheduler() -> ! {
     let c = mycpu();
     c.proc = null_mut();
@@ -245,13 +247,40 @@ pub fn scheduler() -> ! {
                 c.proc = p as *mut Proc;
                 p.state = ProcState::Running;
                 crate::vm::switchuvm(c.proc);
-                swtch(p.context);
+                swtch(&mut c.scheduler as *mut *mut Context, p.context);
                 
                 // Process is done running for now.
                 c.proc = null_mut();
             }
         }
     }
+}
+
+fn sched() {
+    let c = mycpu();
+    if c.proc.is_null() {
+        panic!("sched with no process");
+    }
+    let p = unsafe { &mut *c.proc };
+
+    if p.state == ProcState::Running {
+        panic!("sched running");
+    }
+    if (crate::x86::readeflags() & FL_IF) != 0 {
+        panic!("sched interruptible");
+    }
+
+    let intena = c.intena;
+    unsafe {
+        swtch(&mut p.context as *mut *mut Context, c.scheduler);
+    }
+    c.intena = intena;
+}
+
+pub fn r#yield() {
+    let p = myproc().expect("yield with no process");
+    p.state = ProcState::Runnable;
+    sched();
 }
 
 pub fn procdump() {
