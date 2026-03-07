@@ -77,7 +77,7 @@ initcode: initcode.S
 	$(OBJDUMP) -S initcode.o > initcode.asm
 
 kernel.a: $(RS)
-	cargo build -Z build-std=core -Z build-std-features=compiler-builtins-mem \
+	cargo build -Z build-std=core -Z build-std-features=compiler-builtins-mem -Z json-target-spec\
 	  --target ./targets/i686.json --release
 	@tdir=$$(cargo metadata --format-version=1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p'); \
 	lib=$$(find "$$tdir" -maxdepth 4 -type f -name 'libkernel.a' | head -n 1); \
