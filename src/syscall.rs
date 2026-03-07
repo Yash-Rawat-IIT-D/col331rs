@@ -90,7 +90,9 @@ pub fn argptr(n: i32, pp: &mut *const u8, size: i32) -> i32 {
         return -1;
     }
 
-    *pp = base as usize as *const u8;
+    unsafe {
+        *pp = curproc.offset.add(base as usize) as *const u8;
+    }
     0
 }
 

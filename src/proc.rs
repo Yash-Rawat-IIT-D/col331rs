@@ -1,7 +1,7 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
-use crate::println;
+// use crate::println;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
