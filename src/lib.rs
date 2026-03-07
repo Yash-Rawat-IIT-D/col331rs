@@ -112,8 +112,10 @@ pub extern "C" fn entryofrust() -> ! {
     log::initlog(param::ROOTDEV);
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     vm::seginit();       // segment descriptors
+    println!("COL331RS: Hello, world!");
     proc::pinit();       // first process
     proc::pinit();       // another process
+    println!("Welcome to COL331RS!");
     proc::scheduler();   // start running processes (never returns)
 }
 

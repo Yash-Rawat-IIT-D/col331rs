@@ -1,6 +1,7 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
+use crate::println;
 // use crate::println;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
@@ -250,7 +251,7 @@ pub fn scheduler() -> ! {
                 if p.state != ProcState::Runnable {
                     continue;
                 }
-                
+                // println!("{}: running {}", p.pid, core::str::from_utf8(&p.name).unwrap_or("???"));
                 // Switch to chosen process.
                 c.proc = p as *mut Proc;
                 p.state = ProcState::Running;
