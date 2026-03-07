@@ -7,7 +7,7 @@ use crate::println;
 use crate::lapic::lapiceoi;
 use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
-use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, SEG_KCODE, STS_IG32, STS_TG32};
+use crate::constants::{DPL_USER, IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, T_SYSCALL, SEG_KCODE, STS_IG32, STS_TG32};
 use crate::uart::uartintr;
 
 extern "C" {
@@ -57,6 +57,12 @@ pub fn tvinit() {
             0
         );
     }
+    arr[T_SYSCALL as usize].set_gate(
+        true,
+        SEG_KCODE << 3,
+        unsafe { vectors[T_SYSCALL as usize] },
+        DPL_USER,
+    );
     unsafe {
         let _ = (*addr_of_mut!(IDT)).set(arr);
     }
@@ -76,6 +82,15 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
     }
 
     let tf = unsafe { &mut *orig_tf };
+
+    if tf.trapno == T_SYSCALL {
+        if let Some(p) = myproc() {
+            p.tf = orig_tf;
+            crate::syscall::syscall();
+            return;
+        }
+        panic!("syscall with no current process");
+    }
 
 	const TIMER: u32 = T_IRQ0 + IRQ_TIMER;
 	const SPURIOUS: u32 = T_IRQ0 + IRQ_SPURIOUS;

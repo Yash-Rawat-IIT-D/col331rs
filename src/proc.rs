@@ -1,9 +1,11 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
+use crate::println;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
+use crate::param::NOFILE;
 use crate::kalloc::kalloc;
 use core::ptr::null_mut;
 use core::cell::OnceCell;
@@ -40,6 +42,7 @@ pub enum ProcState {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Proc {
+    pub sz: u32,                      // Size of process memory (bytes)
     pub offset: *mut u8,              // Process memory base
     pub kstack: *mut u8,              // Bottom of kernel stack for this process (unused for now)
     pub state: ProcState,             // Process state
@@ -47,6 +50,7 @@ pub struct Proc {
     pub parent: *mut Proc,            // Parent process
     pub tf: *mut TrapFrame,           // Trap frame for current syscall
     pub context: *mut Context,        // swtch() here to run process
+    pub ofile: [Option<usize>; NOFILE], // Open files
     pub cwd: usize,                   // Current directory (inode number)
     pub name: [u8; 16],               // Process name (debugging)
 }
@@ -54,6 +58,7 @@ pub struct Proc {
 impl Proc {
     pub const fn new() -> Self {
         Self {
+            sz: 0,
             offset: null_mut(),
             kstack: null_mut(),
             state: ProcState::Unused,
@@ -61,6 +66,7 @@ impl Proc {
             parent: null_mut(),
             tf: null_mut(),
             context: null_mut(),
+            ofile: [None; NOFILE],
             cwd: 0,
             name: [0; 16],
         }
@@ -154,6 +160,8 @@ fn allocproc() -> Option<&'static mut Proc> {
                     p.state = ProcState::Unused;
                     return None;
                 }
+                p.sz = PGSIZE - KSTACKSIZE as u32;
+                p.ofile = [None; NOFILE];
                 
                 // Calculate stack pointer at the end of process memory
                 let sp = p.offset.add(PGSIZE as usize);
@@ -188,7 +196,7 @@ pub fn pinit() {
         }
         
         let p = allocproc().expect("Failed to allocate first process");
-        
+        // println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
@@ -203,7 +211,7 @@ pub fn pinit() {
         (*p.tf).es = (*p.tf).ds;
         (*p.tf).ss = (*p.tf).ds;
         (*p.tf).eflags = FL_IF;
-        (*p.tf).esp = PGSIZE;
+        (*p.tf).esp = PGSIZE - KSTACKSIZE as u32;
         (*p.tf).eip = 0; // beginning of initcode.S
         
         // Set process name
