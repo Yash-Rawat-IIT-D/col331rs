@@ -132,3 +132,10 @@ qemu: xv6.img fs.img
 qemu-gdb: xv6.img .gdbinit fs.img
 	@echo "*** Now run 'gdb'." 1>&2
 	$(QEMU) -nographic $(QEMUOPTS) -S $(QEMUGDB)
+
+qemu-full-debug: xv6.img fs.img
+	$(QEMU) -nographic $(QEMUOPTS) \
+	-debugcon file:qemu_debug.log \
+	-global isa-debugcon.iobase=0xe9 \
+	-D qemu.log -d guest_errors \
+	2> qemu_err.log
