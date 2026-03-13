@@ -43,6 +43,29 @@ macro_rules! println {
     });
 }
 
+// QEMU Debugcon support (Port 0xE9)
+// This writes directly to the emulator's log file, bypassing the serial driver.
+// Useful for debugging crashes before UART is ready or inside interrupt handlers.
+pub struct QemuDebug {}
+
+impl core::fmt::Write for QemuDebug {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        for c in s.bytes() {
+            crate::x86::outb(0xe9, c);
+        }
+        Ok(())
+    }
+}
+
+#[macro_export]
+macro_rules! debug {
+    ($($arg:tt)*) => ({
+        use core::fmt::Write;
+        let mut d = crate::QemuDebug {};
+        let _ = writeln!(&mut d, $($arg)*);
+    });
+}
+
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
@@ -111,9 +134,13 @@ pub extern "C" fn entryofrust() -> ! {
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
+    debug!("Welcome to COL331 OS!");
     vm::seginit();       // segment descriptors
+    debug!("Segment descriptors initialized");
     proc::pinit();       // first process
+    debug!("First process initialized");
     proc::pinit();       // another process
+    debug!("Second process initialized");
     proc::scheduler();   // start running processes (never returns)
 }
 
@@ -127,10 +154,12 @@ fn panic(info: &PanicInfo) -> ! {
     cli();
     
     // Print panic message with LAPIC ID to identify which CPU panicked
-    let mut console = console::Console {};
-    let _ = write!(&mut console, "lapicid {}: panic: ", lapicid());
-    let _ = writeln!(&mut console, "{}", info);
+    // let mut console = console::Console {};
+    // let _ = write!(&mut console, "lapicid {}: panic: ", lapicid());
+    // let _ = writeln!(&mut console, "{}", info);
     
+    debug!("lapicid {}: panic: {}", lapicid(), info);
+
     // Print stack trace
     let mut pcs = [0u32; 10];
     let stack_ptr = &info as *const _ as *const u32;
@@ -138,7 +167,8 @@ fn panic(info: &PanicInfo) -> ! {
     
     for &pc in &pcs {
         if pc != 0 {
-            let _ = writeln!(&mut console, " {:#x}", pc);
+            // let _ = writeln!(&mut console, " {:#x}", pc);
+            debug!(" {:#x}", pc);
         }
     }
     

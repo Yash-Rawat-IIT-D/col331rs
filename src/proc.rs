@@ -3,6 +3,7 @@ use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
 use crate::println;
 // use crate::println;
+use crate::debug;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
@@ -31,6 +32,7 @@ pub struct Context {
     pub eip: u32,
 }
 
+#[repr(i32)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcState {
     Unused,
@@ -82,6 +84,7 @@ struct PTable {
 static mut PTABLE: OnceCell<PTable> = OnceCell::new();
 static mut NEXTPID: i32 = 1;
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Cpu {
     pub apicid: u8,                   // Local APIC ID
@@ -89,7 +92,7 @@ pub struct Cpu {
     pub ts: TaskState,                // Used by x86 to find stack for interrupt
     pub gdt: [SegDesc; NSEGS],        // x86 global descriptor table
     pub ncli: i32,                    // Depth of pushcli nesting.
-    pub intena: bool,                 // Were interrupts enabled before pushcli?
+    pub intena: i32,                  // Were interrupts enabled before pushcli?
     pub proc: *mut Proc,              // The process running on this cpu or null
 }
 
@@ -101,7 +104,7 @@ impl Cpu {
             ts: TaskState::new(),
             gdt: [SegDesc::new(); NSEGS],
             ncli: 0,
-            intena: false,
+            intena: 0,
             proc: null_mut(),
         }
     }
@@ -195,8 +198,9 @@ pub fn pinit() {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: usize;
         }
-        
+        debug!("Initializing first user process");
         let p = allocproc().expect("Failed to allocate first process");
+        debug!("Returned from allocproc with pid {}", p.pid);
         // println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
@@ -279,11 +283,11 @@ fn sched() {
         panic!("sched interruptible");
     }
 
-    let intena = c.intena;
+    let intena = c.intena != 0;
     unsafe {
         swtch(&mut p.context as *mut *mut Context, c.scheduler);
     }
-    c.intena = intena;
+    c.intena = intena as i32;
 }
 
 pub fn r#yield() {
