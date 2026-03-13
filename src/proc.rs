@@ -180,7 +180,7 @@ fn allocproc() -> Option<&'static mut Proc> {
                 p.context = sp as *mut Context;
                 
                 // Initialize context
-                core::ptr::write_bytes(p.context, 0, 1);
+                core::ptr::write_bytes(p.context, 0, core::mem::size_of::<Context>());
                 (*p.context).eip = trapret as *const () as usize as u32;
                 
                 return Some(p);
@@ -209,7 +209,7 @@ pub fn pinit() {
         core::ptr::copy_nonoverlapping(src, dst, size);
         
         // Initialize trapframe
-        core::ptr::write_bytes(p.tf, 0, 1);
+        core::ptr::write_bytes(p.tf, 0, core::mem::size_of::<TrapFrame>());
         
         (*p.tf).cs = ((SEG_UCODE << 3) | DPL_USER as u16) as u16;
         (*p.tf).ds = ((SEG_UDATA << 3) | DPL_USER as u16) as u16;
