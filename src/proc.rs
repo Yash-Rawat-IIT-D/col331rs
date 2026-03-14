@@ -4,7 +4,7 @@ use crate::mmu::SegDesc;
 use crate::x86::TrapFrame;
 use crate::param::NPROC;
 use core::ptr::null_mut;
-use core::cell::OnceCell;
+// use core::cell::OnceCell;
 
 // Saved registers for kernel context switches.
 // Don't need to save all the segment registers (%cs, etc),
@@ -68,7 +68,10 @@ struct PTable {
     proc: [Proc; NPROC],
 }
 
-static mut PTABLE: OnceCell<PTable> = OnceCell::new();
+static mut PTABLE: PTable = PTable {
+    proc: [Proc::new(); NPROC],
+};
+
 static mut NEXTPID: i32 = 1;
 
 #[derive(Debug, Clone, Copy)]
@@ -122,17 +125,12 @@ extern "C" {
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
     unsafe {
-        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
         
-        if (*ptable_ptr).get().is_none() {
-            let _ = (*ptable_ptr).set(PTable {
-                proc: [Proc::new(); NPROC],
-            });
-        }
+
         
-        let ptable = (*ptable_ptr).get_mut().unwrap();
+        let ptable = &raw mut PTABLE;
         
-        for p in &mut ptable.proc {
+        for p in &mut (*ptable).proc {
             if p.state == ProcState::Unused {
                 // Found an unused process
                 p.state = ProcState::Embryo;
@@ -216,10 +214,10 @@ pub fn scheduler() -> ! {
         
         // Loop over process table looking for process to run.
         unsafe {
-            let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
-            let ptable = (*ptable_ptr).get_mut().expect("Process table not initialized");
+         
+         let ptable = &raw mut PTABLE;
             
-            for p in &mut ptable.proc {
+            for p in &mut (*ptable).proc {
                 if p.state != ProcState::Runnable {
                     continue;
                 }
