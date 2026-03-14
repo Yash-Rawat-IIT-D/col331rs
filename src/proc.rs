@@ -72,7 +72,9 @@ struct PTable {
     proc: [Proc; NPROC],
 }
 
-static mut PTABLE: OnceCell<PTable> = OnceCell::new();
+static mut PTABLE: PTable = PTable {
+    proc: [Proc::new(); NPROC],
+};
 static mut NEXTPID: i32 = 1;
 
 #[derive(Debug, Clone, Copy)]
@@ -132,17 +134,11 @@ extern "C" {
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
     unsafe {
-        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
         
-        if (*ptable_ptr).get().is_none() {
-            let _ = (*ptable_ptr).set(PTable {
-                proc: [Proc::new(); NPROC],
-            });
-        }
         
-        let ptable = (*ptable_ptr).get_mut().unwrap();
+        let ptable = &raw mut PTABLE;
         
-        for p in &mut ptable.proc {
+        for p in &mut (*ptable).proc {
             if p.state == ProcState::Unused {
                 // Found an unused process
                 p.state = ProcState::Embryo;
@@ -184,7 +180,7 @@ pub fn pinit() {
     unsafe {
         extern "C" {
             static _binary_initcode_start: u8;
-            static _binary_initcode_size: usize;
+            static _binary_initcode_size: u8;
         }
         
         let p = allocproc().expect("Failed to allocate first process");
@@ -192,7 +188,7 @@ pub fn pinit() {
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
-        let size = &_binary_initcode_size as *const usize as usize;
+        let size = &_binary_initcode_size as *const u8 as usize;
         core::ptr::copy_nonoverlapping(src, dst, size);
         
         // Initialize trapframe
@@ -233,10 +229,9 @@ pub fn scheduler() -> ! {
         
         // Loop over process table looking for process to run.
         unsafe {
-            let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
-            let ptable = (*ptable_ptr).get_mut().expect("Process table not initialized");
+            let ptable = &raw mut PTABLE;
             
-            for p in &mut ptable.proc {
+            for p in &mut (*ptable).proc {
                 if p.state != ProcState::Runnable {
                     continue;
                 }
@@ -256,12 +251,8 @@ pub fn scheduler() -> ! {
 
 pub fn procdump() {
     unsafe {
-        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
-        if (*ptable_ptr).get().is_none() {
-            return;
-        }
-        let ptable = (*ptable_ptr).get().unwrap();
-        for p in &ptable.proc {
+        let ptable = &raw mut PTABLE;
+        for p in &(*ptable).proc {
             if p.state == ProcState::Unused {
                 continue;
             }
