@@ -148,7 +148,7 @@ static mut PANICKED: bool = false;
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    use core::fmt::Write;
+    // use core::fmt::Write;
     
     // Disable interrupts to prevent interrupt handlers from interfering
     cli();

@@ -3,7 +3,7 @@ use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
 // use crate::println;
 use crate::println;
-// use crate::debug;
+use crate::debug;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
@@ -192,7 +192,7 @@ pub fn pinit() {
     unsafe {
         extern "C" {
             static _binary_initcode_start: u8;
-            static _binary_initcode_size: usize;
+            static _binary_initcode_size: u8;
         }
         // debug!("Initializing first user process");
         let p = allocproc().expect("Failed to allocate first process");
@@ -201,7 +201,8 @@ pub fn pinit() {
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
-        let size = _binary_initcode_size as usize;
+        let size = &_binary_initcode_size as *const u8 as usize;
+        debug!("Copying initcode to process memory: src={:p}, dst={:p}, size={}", src, dst, size);
         // debug!("initcode size = {}", _binary_initcode_size as usize);
         core::ptr::copy_nonoverlapping(src, dst, size);
         
