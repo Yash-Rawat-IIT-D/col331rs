@@ -1,16 +1,16 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::mmu::{SegDesc, TaskState};
-use crate::println;
 // use crate::println;
-use crate::debug;
+// use crate::println;
+// use crate::debug;
 use crate::x86::TrapFrame;
 use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
 use crate::param::NOFILE;
 use crate::kalloc::kalloc;
 use core::ptr::null_mut;
-use core::cell::OnceCell;
+// use core::cell::OnceCell;
 
 // Saved registers for kernel context switches.
 // Don't need to save all the segment registers (%cs, etc),
@@ -81,7 +81,10 @@ struct PTable {
     proc: [Proc; NPROC],
 }
 
-static mut PTABLE: OnceCell<PTable> = OnceCell::new();
+// static mut PTABLE: OnceCell<PTable> = OnceCell::new();
+static mut PTABLE: PTable = PTable {
+    proc: [Proc::new(); NPROC],
+};
 static mut NEXTPID: i32 = 1;
 
 #[repr(C)]
@@ -141,20 +144,14 @@ extern "C" {
 // state required to run in the kernel.
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
-    unsafe {
-        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
+    unsafe {  
+       let ptable = &raw mut PTABLE;
         
-        if (*ptable_ptr).get().is_none() {
-            let _ = (*ptable_ptr).set(PTable {
-                proc: [Proc::new(); NPROC],
-            });
-        }
-        
-        let ptable = (*ptable_ptr).get_mut().unwrap();
-        
-        for p in &mut ptable.proc {
+        for p in &mut (*ptable).proc {
+            // debug!("process : pid {}, state {:?}", p.pid, p.state);
             if p.state == ProcState::Unused {
                 // Found an unused process
+                // debug!("allocproc: found unused process with pid {}", p.pid);
                 p.state = ProcState::Embryo;
                 p.pid = NEXTPID;
                 NEXTPID += 1;
@@ -168,21 +165,20 @@ fn allocproc() -> Option<&'static mut Proc> {
                 p.ofile = [None; NOFILE];
                 
                 // Calculate stack pointer at the end of process memory
-                let sp = p.offset.add(PGSIZE as usize);
+                let mut sp = p.offset.add(PGSIZE as usize);
+
                 p.kstack = sp.sub(KSTACKSIZE);
-                
-                // Leave room for trap frame
-                let sp = sp.sub(core::mem::size_of::<TrapFrame>());
+
+                sp = sp.sub(core::mem::size_of::<TrapFrame>());
                 p.tf = sp as *mut TrapFrame;
-                
-                // Leave room for context
-                let sp = sp.sub(core::mem::size_of::<Context>());
+
+                sp = sp.sub(core::mem::size_of::<Context>());
                 p.context = sp as *mut Context;
                 
                 // Initialize context
-                core::ptr::write_bytes(p.context, 0, core::mem::size_of::<Context>());
+                core::ptr::write_bytes(p.context, 0, 1);
                 (*p.context).eip = trapret as *const () as usize as u32;
-                
+                // debug!("allocproc: initialized process with pid {}", p.pid);
                 return Some(p);
             }
         }
@@ -198,18 +194,19 @@ pub fn pinit() {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: usize;
         }
-        debug!("Initializing first user process");
+        // debug!("Initializing first user process");
         let p = allocproc().expect("Failed to allocate first process");
-        debug!("Returned from allocproc with pid {}", p.pid);
+        // debug!("Returned from allocproc with pid {}", p.pid);
         // println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
-        let size = &_binary_initcode_size as *const usize as usize;
+        let size = _binary_initcode_size as usize;
+        // debug!("initcode size = {}", _binary_initcode_size as usize);
         core::ptr::copy_nonoverlapping(src, dst, size);
         
         // Initialize trapframe
-        core::ptr::write_bytes(p.tf, 0, core::mem::size_of::<TrapFrame>());
+        core::ptr::write_bytes(p.tf, 0, 1);
         
         (*p.tf).cs = ((SEG_UCODE << 3) | DPL_USER as u16) as u16;
         (*p.tf).ds = ((SEG_UDATA << 3) | DPL_USER as u16) as u16;
@@ -248,10 +245,9 @@ pub fn scheduler() -> ! {
         
         // Loop over process table looking for process to run.
         unsafe {
-            let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
-            let ptable = (*ptable_ptr).get_mut().expect("Process table not initialized");
-            
-            for p in &mut ptable.proc {
+            let ptable = &raw mut PTABLE;
+
+            for p in &mut (*ptable).proc {
                 if p.state != ProcState::Runnable {
                     continue;
                 }
@@ -298,12 +294,8 @@ pub fn r#yield() {
 
 pub fn procdump() {
     unsafe {
-        let ptable_ptr = core::ptr::addr_of_mut!(PTABLE);
-        if (*ptable_ptr).get().is_none() {
-            return;
-        }
-        let ptable = (*ptable_ptr).get().unwrap();
-        for p in &ptable.proc {
+       let ptable = &raw mut PTABLE;
+        for p in &(*ptable).proc {
             if p.state == ProcState::Unused {
                 continue;
             }
