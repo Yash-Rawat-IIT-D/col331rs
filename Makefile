@@ -60,8 +60,24 @@ xv6.img: bootblock kernel
 mkfs: src/mkfs.rs
 	rustc -W warnings -o mkfs src/mkfs.rs
 
-fs.img: mkfs *.txt
-	./mkfs fs.img *.txt
+ULIB = usys.o
+
+usys.o: usys.S
+	$(CC) $(CFLAGS) -c -o usys.o usys.S
+
+user/%.o: user/%.rs
+	rustc -O --edition 2021 --target ./targets/i686.json --emit=obj -o $@ $<
+
+_%: user/%.o $(ULIB)
+	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $@ $^
+	$(OBJDUMP) -S $@ > $*.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $*.sym
+
+UPROGS=\
+	_init
+
+fs.img: mkfs *.txt $(UPROGS)
+	./mkfs fs.img *.txt $(UPROGS)
 
 bootblock: bootasm.S bootmain.c linkers/bootblock.ld
 	$(CC) $(CFLAGS) -fno-pic -O -nostdinc -I. -c bootmain.c
@@ -105,7 +121,8 @@ vectors.S: vectors.pl
 
 clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img mkfs .gdbinit vectors.S initcode initcode.out
+	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img fs.img mkfs .gdbinit vectors.S initcode initcode.out \
+	$(UPROGS) user/*.o usys.o
 	rm -rf target
 
 # run in emulators

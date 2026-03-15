@@ -161,12 +161,22 @@ fn allocproc() -> Option<&'static mut Proc> {
                     p.state = ProcState::Unused;
                     return None;
                 }
-                p.sz = PGSIZE - KSTACKSIZE as u32;
+                p.sz = PGSIZE;
+
+                // kstack lives on a different segment
+
+                p.kstack = kalloc();
+                if p.kstack.is_null() {
+                    p.state = ProcState::Unused;
+                    return None;
+                } 
+
+                let mut sp = p.kstack.add(PGSIZE as usize);
+
                 p.ofile = [None; NOFILE];
                 
                 // Calculate stack pointer at the end of process memory
-                let mut sp = p.offset.add(PGSIZE as usize);
-
+        
                 p.kstack = sp.sub(KSTACKSIZE);
 
                 sp = sp.sub(core::mem::size_of::<TrapFrame>());
@@ -197,7 +207,6 @@ pub fn pinit() {
         // debug!("Initializing first user process");
         let p = allocproc().expect("Failed to allocate first process");
         // debug!("Returned from allocproc with pid {}", p.pid);
-        println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
@@ -214,7 +223,7 @@ pub fn pinit() {
         (*p.tf).es = (*p.tf).ds;
         (*p.tf).ss = (*p.tf).ds;
         (*p.tf).eflags = FL_IF;
-        (*p.tf).esp = PGSIZE - KSTACKSIZE as u32;
+        (*p.tf).esp = PGSIZE;
         (*p.tf).eip = 0; // beginning of initcode.S
         
         // Set process name

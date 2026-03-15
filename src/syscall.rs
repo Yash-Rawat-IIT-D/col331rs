@@ -1,4 +1,4 @@
-use crate::constants::{SYS_CLOSE, SYS_OPEN, SYS_WRITE};
+use crate::constants::{SYS_CLOSE, SYS_OPEN, SYS_WRITE, SYS_EXEC};
 use crate::proc::myproc;
 
 pub fn fetchint(addr: u32, ip: &mut i32) -> i32 {
@@ -91,7 +91,7 @@ pub fn argptr(n: i32, pp: &mut *const u8, size: i32) -> i32 {
     }
 
     unsafe {
-        *pp = curproc.offset.add(base as usize) as *const u8;
+        *pp = base as *const u8;
     }
     0
 }
@@ -104,6 +104,8 @@ pub fn argstr(n: i32, pp: &mut *const u8) -> i32 {
     fetchstr(addr as u32, pp)
 }
 
+
+
 pub fn syscall() {
     let curproc = match myproc() {
         Some(p) => p,
@@ -115,9 +117,10 @@ pub fn syscall() {
 
     let num = unsafe { (*curproc.tf).eax as usize };
     let ret = match num {
-        SYS_OPEN => crate::sysfile::sys_open(),
+        SYS_OPEN =>  crate::sysfile::sys_open(),
         SYS_WRITE => crate::sysfile::sys_write(),
         SYS_CLOSE => crate::sysfile::sys_close(),
+        SYS_EXEC =>  crate::sysfile::sys_exec(),
         _ => {
             let name_len = curproc
                 .name

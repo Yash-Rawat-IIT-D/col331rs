@@ -36,17 +36,19 @@ pub fn switchuvm(p: *mut Proc) {
     unsafe {
         let c = mycpu();
         c.gdt[SEG_UCODE as usize] =
-            SegDesc::seg(STA_X | STA_R, (*p).offset as u32, (PROCSIZE << 12) - 1, DPL_USER);
+        SegDesc::seg(STA_X | STA_R, (*p).offset as u32, PROCSIZE << 12, DPL_USER);
+
         c.gdt[SEG_UDATA as usize] =
-            SegDesc::seg(STA_W, (*p).offset as u32, (PROCSIZE << 12) - 1, DPL_USER);
-        lgdt(&c.gdt, size_of_val(&c.gdt));
+        SegDesc::seg(STA_W, (*p).offset as u32, PROCSIZE << 12, DPL_USER);
 
         c.gdt[SEG_TSS as usize] = SegDesc::seg16(
             STS_T32A,
             (&c.ts as *const _ as usize) as u32,
             (size_of::<crate::mmu::TaskState>() - 1) as u32,
             0,
+            0,
         );
+
         c.ts.ss0 = SEG_KDATA << 3;
         c.ts.esp0 = ((*p).kstack as usize + KSTACKSIZE) as u32;
         c.ts.iomb = 0xFFFF;

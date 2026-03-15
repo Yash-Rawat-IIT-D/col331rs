@@ -46,13 +46,13 @@ impl SegDesc {
 
     /// Create a 16-bit system segment descriptor.
     /// Matches the C macro: SEG16(type, base, lim, dpl)
-    pub fn seg16(seg_type: u8, base: u32, lim: u32, dpl: u8) -> Self {
+    pub fn seg16(seg_type: u8, base: u32, lim: u32, dpl: u8, s_bit : u8) -> Self {
         let mut seg = SegDesc::default();
         seg.set_lim_15_0((lim & 0xffff) as u16);
         seg.set_base_15_0((base & 0xffff) as u16);
         seg.set_base_23_16(((base >> 16) & 0xff) as u8);
         seg.set_seg_type(seg_type);
-        seg.set_s(0);
+        seg.set_s(s_bit);
         seg.set_dpl(dpl);
         seg.set_p(1);
         seg.set_lim_19_16(((lim >> 16) & 0xf) as u8);
@@ -62,6 +62,10 @@ impl SegDesc {
         seg.set_g(0);
         seg.set_base_31_24(((base >> 24) & 0xff) as u8);
         seg
+    }
+
+    pub fn self_set_system(&mut self) {
+        self.set_s(0);
     }
 }
 

@@ -17,4 +17,4 @@ panic="abort"
 debug = true
 opt-level = "s"    # Optimize for size
 codegen-units = 1  # Fewer units for better cross-function inlining
-lto = false         # Disabled Link-time optimization
+lto = true        # Disabled Link-time optimization

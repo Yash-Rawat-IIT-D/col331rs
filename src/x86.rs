@@ -99,6 +99,18 @@ pub fn noop() {
     core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
 }
 
+pub fn ebp() -> u32 {
+    let val: u32;
+    unsafe {
+        core::arch::asm!(
+            "mov {}, ebp",
+            out(reg) val,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+    val
+}
+
 // x86.rs
 pub unsafe fn insl(port: u16, addr: *mut u32, cnt: usize) {
     core::arch::asm!(

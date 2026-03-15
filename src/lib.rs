@@ -30,6 +30,8 @@ mod mmu;
 mod vm;
 mod spinlock;
 mod kalloc;
+mod exec;
+mod init;
 use crate::traps::*;
 use crate::constants::PHYSTOP;
 

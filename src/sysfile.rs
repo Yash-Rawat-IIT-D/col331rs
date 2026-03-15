@@ -7,7 +7,9 @@ use crate::fs;
 use crate::log;
 use crate::param::NOFILE;
 use crate::proc::myproc;
-use crate::syscall::{argint, argptr, argstr};
+use crate::syscall::{argint, argptr, argstr, fetchint, fetchstr};
+use crate::param::MAXARG;
+use crate::exec::exec;
 
 fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
     let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
@@ -168,6 +170,46 @@ pub fn sys_open() -> i32 {
 
     file::file_set_inode(f_idx, ip, omode);
     fd
+}
+
+pub fn sys_exec() -> i32 {
+    let mut path: *const u8 = core::ptr::null();
+    let mut uargv: i32 = 0;
+    let mut uarg: u32;
+    let mut argv: [*const u8; MAXARG] = [core::ptr::null(); MAXARG];
+    let len_path = argstr(0, &mut path);
+    if  len_path < 0 || argint(1, &mut uargv) < 0 {
+        return -1;
+    }
+
+    let mut i = 0;
+
+    loop {
+        if i >= MAXARG {
+            return -1;
+        }
+
+        uarg = 0;
+        if fetchint((uargv as u32) + 4 * i as u32, &mut (uarg as i32)) < 0 {
+            return -1;
+        }
+
+        if uarg == 0 {
+            argv[i] = core::ptr::null();
+            break;
+        }
+
+        if fetchstr(uarg, &mut argv[i]) < 0 {
+            return -1;
+        }
+
+        i += 1;
+    }
+
+    let path_slice = unsafe { core::slice::from_raw_parts(path, len_path as usize) };
+
+    exec(path_slice, &argv)
+
 }
 
 fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {

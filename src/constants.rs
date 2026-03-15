@@ -91,6 +91,7 @@ pub const T_SYSCALL: u32 = 64;    // system call
 pub const SYS_OPEN: usize = 1;
 pub const SYS_WRITE: usize = 2;
 pub const SYS_CLOSE: usize = 3;
+pub const SYS_EXEC: usize = 4;
 pub const T_DEFAULT: u32 = 500;   // catchall
 pub const T_IRQ0: u32 = 32;
 pub const IRQ_TIMER: u32 = 0;
@@ -195,3 +196,11 @@ pub const NINODES: u32 = 200;         // number of inodes in file system
 pub const T_DIR: u16 = 1;             // Directory
 pub const T_FILE: u16 = 2;            // File
 pub const T_DEV: u16 = 3;             // Device
+
+// ------------------------------------------------------ ELF CONSTANTS (elf.h) ----------------------------------------------
+
+pub const ELF_MAGIC:           u32 = 0x464C457F; // "\x7FELF" in little endian'
+pub const ELF_PROG_LOAD:       u32 = 1;          // Loadable program segment
+pub const ELF_PROG_FLAG_EXEC:  u32 = 0x1;        // Executable segment
+pub const ELF_PROG_FLAG_WRITE: u32 = 0x2;        // Write
+pub const ELF_PROG_FLAG_READ:  u32 = 0x4;        // Read
