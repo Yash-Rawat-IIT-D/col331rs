@@ -10,14 +10,15 @@ pub struct Spinlock {
     pub name: *const u8,      // Name of lock
 }
 
-impl Default for Spinlock {
-    fn default() -> Self {
+impl Spinlock {
+    pub const fn new() -> Self {
         Self {
             locked: 0,
             name: core::ptr::null(),
         }
     }
 }
+
 
 /// Record the current call stack in pcs[] by following the %ebp chain.
 pub fn getcallerpcs(v: *const u32, pcs: &mut [u32; 10]) {
@@ -80,19 +81,25 @@ pub fn popcli() {
 }
 
 /// Initialize a spinlock
-pub fn initlock(lk: &mut Spinlock, name: *const u8) {
-    lk.name = name;
-    lk.locked = 0;
+pub fn initlock(lk: * mut Spinlock, name: *const u8) {
+    unsafe {
+    (*lk).name = name;
+    (*lk).locked = 0;
+    }
 }
 
 /// Acquire the lock
-pub fn acquire(lk: &mut Spinlock) {
+pub fn acquire(lk: * mut Spinlock) {
+    unsafe {
     pushcli();
-    lk.locked = 1;
+    (*lk).locked = 1;
+    }
 }
 
 /// Release the lock
-pub fn release(lk: &mut Spinlock) {
-    lk.locked = 0;
+pub fn release(lk: * mut Spinlock) {
+    unsafe {
+    (*lk).locked = 0;
     popcli();
+    }
 }

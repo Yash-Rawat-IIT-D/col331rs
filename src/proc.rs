@@ -148,7 +148,7 @@ extern "C" {
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
     unsafe {  
-        acquire(&mut PTABLE.lock);
+        acquire(&raw mut PTABLE.lock);
         let ptable = &raw mut PTABLE;
         
         for p in &mut (*ptable).proc {
@@ -159,7 +159,7 @@ fn allocproc() -> Option<&'static mut Proc> {
                 p.state = ProcState::Embryo;    // Reserved for initialization
                 p.pid = NEXTPID;
                 NEXTPID += 1;
-                release(&mut PTABLE.lock);
+                release(&raw mut PTABLE.lock);
 
                 p.offset = kalloc();
                 if p.offset.is_null() {
@@ -190,21 +190,21 @@ fn allocproc() -> Option<&'static mut Proc> {
                 // which returns to trapret
                 sp = sp.sub(4); 
 
-                unsafe {
-                    core::ptr::write(sp as *mut u32, trapret as u32);
-                }
+                
+                core::ptr::write(sp as *mut u32, trapret as *const () as u32);
+                
                 
                 sp = sp.sub(core::mem::size_of::<Context>());
                 p.context = sp as *mut Context;
                 
                 // Initialize context
                 core::ptr::write_bytes(p.context, 0, 1);
-                (*p.context).eip = forkret as u32;
+                (*p.context).eip = forkret as *const ()as u32;
                 // debug!("allocproc: initialized process with pid {}", p.pid);
                 return Some(p);
             }
         }
-        release(&mut PTABLE.lock);
+        release(&raw mut PTABLE.lock);
         None
     }
 }
@@ -212,7 +212,7 @@ fn allocproc() -> Option<&'static mut Proc> {
 // Set up first process.
 pub fn pinit() {
     unsafe {
-        initlock(&mut PTABLE.lock, "ptable\0".as_ptr());
+        initlock(&raw mut PTABLE.lock, "ptable\0".as_ptr());
         extern "C" {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: u8;
@@ -268,7 +268,7 @@ pub fn scheduler() -> ! {
         
         // Loop over process table looking for process to run.
         unsafe {
-            acquire(&mut PTABLE.lock);
+            acquire(&raw mut PTABLE.lock);
             let ptable = &raw mut PTABLE;
 
             for p in &mut (*ptable).proc {
@@ -285,7 +285,7 @@ pub fn scheduler() -> ! {
                 // Process is done running for now.
                 c.proc = null_mut();
             }
-            release(&mut PTABLE.lock);
+            release(&raw mut PTABLE.lock);
         }
     }
 }
@@ -312,21 +312,21 @@ fn sched() {
 }
 
 pub fn r#yield() {
-    acquire(unsafe{ &mut PTABLE.lock });
+    acquire(unsafe{ &raw mut PTABLE.lock });
     let p = myproc().expect("yield with no process");
     p.state = ProcState::Runnable;
     sched();
-    release(unsafe {&mut PTABLE.lock });
+    release(unsafe {&raw mut PTABLE.lock });
 }
 
 fn forkret() {
     // Release the ptable lock held by scheduler
-    release(unsafe {&mut PTABLE.lock});
+    release(unsafe {&raw mut PTABLE.lock});
 }
 
 pub fn procdump() {
     unsafe {
-        acquire(&mut PTABLE.lock);
+        acquire(&raw mut PTABLE.lock);
         let ptable = &raw mut PTABLE;
         for p in &(*ptable).proc {
             if p.state == ProcState::Unused {
@@ -342,6 +342,6 @@ pub fn procdump() {
             let name = core::str::from_utf8(&p.name[..name_len]).unwrap_or("???");
             crate::println!("{} {} {}", p.pid, state, name);
         }
-        release(&mut PTABLE.lock);
+        release(&raw mut PTABLE.lock);
     }
 }

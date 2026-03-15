@@ -15,7 +15,7 @@ struct BCache {
 impl BCache {
     pub const fn new() -> Self {
         Self {
-            lock: Spinlock::default(),
+            lock: Spinlock::new(),
             buf: [const { Buf::new() }; NBUF],
             head_prev: HEAD,
             head_next: HEAD,
@@ -30,7 +30,7 @@ pub fn binit() {
         // empty list
         BCACHE.head_prev = HEAD;
         BCACHE.head_next = HEAD;
-        initlock(&mut BCACHE.lock, b"bcache\0".as_ptr());
+        initlock(&raw mut BCACHE.lock, b"bcache\0".as_ptr());
         // insert all buffers at head (MRU side)
         for i in 0..NBUF {
             insert_at_head(i);
@@ -86,13 +86,13 @@ pub fn buf_mut(idx: usize) -> &'static mut Buf {
 // Look for cached block; else recycle an unused non-dirty buffer.
 fn bget(dev: u32, blockno: u32) -> usize {
     unsafe {
-        acquire(&mut BCACHE.lock);
+        acquire(&raw mut BCACHE.lock);
         // Is the block already cached?
         let mut b = BCACHE.head_next;
         while b != HEAD {
             if BCACHE.buf[b].dev == dev && BCACHE.buf[b].blockno == blockno {
                 BCACHE.buf[b].refcnt += 1;
-                release(&mut BCACHE.lock);
+                release(&raw mut BCACHE.lock);
                 return b;
             }
             b = BCACHE.buf[b].next;
@@ -108,7 +108,7 @@ fn bget(dev: u32, blockno: u32) -> usize {
                 BCACHE.buf[b].flags.store(0, Ordering::Release);
                 BCACHE.buf[b].refcnt = 1;
                 BCACHE.buf[b].qnext = None;
-                release(&mut BCACHE.lock);
+                release(&raw mut BCACHE.lock);
                 return b;
             }
             b = BCACHE.buf[b].prev;
@@ -140,7 +140,7 @@ pub fn bwrite(idx: usize) {
 // Release buffer. If refcnt hits 0, move to MRU head.
 pub fn brelse(idx: usize) {
     unsafe {
-        acquire(&mut BCACHE.lock);
+        acquire(&raw mut BCACHE.lock);
         let b = &mut BCACHE.buf[idx];
         if b.refcnt == 0 {
             panic!("brelse: refcnt underflow");
@@ -151,6 +151,6 @@ pub fn brelse(idx: usize) {
             remove_from_list(idx);
             insert_at_head(idx);
         }
-        release(&mut BCACHE.lock);
+        release(&raw mut BCACHE.lock);
     }
 }

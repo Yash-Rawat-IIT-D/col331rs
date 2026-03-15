@@ -19,7 +19,7 @@ extern "C" {
 }
 
 pub fn kinit(vstart: *mut u8, vend: *mut u8) {
-    unsafe {initlock(&mut KMEM.lock, b"kmem\0".as_ptr());}
+    unsafe {initlock(&raw mut KMEM.lock, b"kmem\0".as_ptr());}
     freerange(vstart, vend);
 }
 
@@ -37,23 +37,23 @@ pub fn kfree(v: *mut u8) {
     }
 
     unsafe {
-        acquire(&mut KMEM.lock);
+        acquire(&raw mut KMEM.lock);
         core::ptr::write_bytes(v, 1, PGSIZE as usize);
         let r = v as *mut Run;
         (*r).next = KMEM.freelist;
         KMEM.freelist = r;
-        release(&mut KMEM.lock);
+        release(&raw mut KMEM.lock);
     }
 }
 
 pub fn kalloc() -> *mut u8 {
     unsafe {
         let r = KMEM.freelist;
-        acquire(&mut KMEM.lock);
+        acquire(&raw mut KMEM.lock);
         if !r.is_null() {
             KMEM.freelist = (*r).next;
         }
-        release(&mut KMEM.lock);
+        release(&raw mut KMEM.lock);
         r as *mut u8
     }
 }

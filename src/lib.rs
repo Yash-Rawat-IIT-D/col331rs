@@ -29,7 +29,6 @@ mod syscall;
 mod sysfile;
 mod mmu;
 mod vm;
-mod spinlock;
 mod kalloc;
 mod exec;
 mod spinlock;

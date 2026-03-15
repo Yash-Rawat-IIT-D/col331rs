@@ -197,7 +197,7 @@ pub fn readsb(dev: u32, sb: &mut Superblock) {
 
 pub fn iinit(dev: u32) {
     unsafe {
-        initlock(&mut ICACHE.lock, "icache\0".as_ptr());
+        initlock(&raw mut ICACHE.lock, "icache\0".as_ptr());
         readsb(dev, &mut *(&raw mut SB));
         let sb = &*(&raw const SB);
         println!(
@@ -342,7 +342,7 @@ fn itrunc(idx: usize) {
 
 pub fn iput(idx: usize) {
     unsafe {
-        acquire(&mut ICACHE.lock);
+        acquire(&raw mut ICACHE.lock);
         if idx >= NINODE {
             panic!("iput: bad inode index");
         }
@@ -351,18 +351,18 @@ pub fn iput(idx: usize) {
         }
 
         if ICACHE.inode[idx].valid != 0 && ICACHE.inode[idx].nlink == 0 && ICACHE.inode[idx].refcnt == 1 {
-            release(&mut ICACHE.lock); // inode has no links and no other references, truncate and free
+            release(&raw mut ICACHE.lock); // inode has no links and no other references, truncate and free
 
             itrunc(idx);
             ICACHE.inode[idx].type_ = 0;
             iupdate(idx);
             ICACHE.inode[idx].valid = 0;
 
-            acquire(&mut ICACHE.lock);
+            acquire(&raw mut ICACHE.lock);
         }
 
         ICACHE.inode[idx].refcnt -= 1;
-        release(&mut ICACHE.lock);
+        release(&raw mut ICACHE.lock);
     }
 }
 
@@ -399,7 +399,7 @@ pub fn iupdate(idx: usize) {
 
 pub fn iget(dev: u32, inum: u32) -> usize {
     unsafe {
-        acquire(&mut ICACHE.lock);
+        acquire(&raw mut ICACHE.lock);
 
         let mut empty: Option<usize> = None;
 
@@ -408,7 +408,7 @@ pub fn iget(dev: u32, inum: u32) -> usize {
 
             if ip.refcnt > 0 && ip.dev == dev && ip.inum == inum {
                 ip.refcnt += 1;
-                release(&mut ICACHE.lock);
+                release(&raw mut ICACHE.lock);
                 return i;
             }
 
@@ -425,7 +425,7 @@ pub fn iget(dev: u32, inum: u32) -> usize {
         ip.refcnt = 1;
         ip.valid = 0;
 
-        release(&mut ICACHE.lock);
+        release(&raw mut ICACHE.lock);
         idx
     }
 }
