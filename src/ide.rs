@@ -1,6 +1,7 @@
 use core::sync::atomic::Ordering;
 use crate::constants::BSIZE;
 use crate::buf::{B_DIRTY, B_VALID};
+use crate::spinlock::{SpinLock, initlock, release, acquire};
 use crate::x86;
 
 const SECTOR_SIZE: usize = 512;
@@ -21,6 +22,7 @@ const FSSIZE: u32 = 1000;
 
 static mut IDEQUEUE: Option<usize> = None;
 static mut HAVEDISK1: bool = false;
+static mut IDELOCK: SpinLock = SpinLock::new();
 
 fn idewait(checkerr: bool) -> i32 {
     let mut r: u8;
@@ -38,6 +40,10 @@ fn idewait(checkerr: bool) -> i32 {
 
 pub fn ideinit() {
     // Route IDE IRQ somewhere; simplest is CPU 0 for now.
+
+    unsafe {
+        initlock(&mut IDELOCK, b"ide\0".as_ptr());
+    }
     crate::ioapic::ioapic_enable(crate::constants::IRQ_IDE, 0);
 
     idewait(false);
@@ -138,6 +144,11 @@ pub fn ideintr() {
 // If B_DIRTY is set, write buf to disk, clear B_DIRTY, set B_VALID.
 // Else if B_VALID is not set, read buf from disk, set B_VALID.
 pub fn iderw(idx: usize) {
+
+    unsafe {
+        acquire(&mut IDELOCK);
+    }
+
     let b = crate::bio::buf_mut(idx);
 
     let flags = b.flags.load(Ordering::Acquire);
@@ -167,7 +178,9 @@ pub fn iderw(idx: usize) {
             idestart(idx);
         }
     }
-
+    unsafe {
+        release(&mut IDELOCK);
+    }
     // Wait for request to finish.
     // The interrupt handler will set B_VALID when done.
     loop {

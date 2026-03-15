@@ -2,13 +2,16 @@ use crate::{uart::*};
 use core::fmt::*;
 use crate::file::DEVSW;
 use crate::param::CONSOLE;
+use crate::spinlock::{Spinlock, acquire, initlock, release};
 pub struct Console {}
 
 impl Write for Console {
     fn write_str(&mut self, s: &str) -> Result {
+        unsafe { acquire(&mut CONSLOCK.lock); }
         for c in s.chars() {
             consputc(c as i32);
         }
+        unsafe { release(&mut CONSLOCK.lock); }
         Ok(())
     }
 }
@@ -21,6 +24,15 @@ const CTRL_D: i32 = C('D');
 const fn C(c: char) -> i32 {
     (c as i32) - ('@' as i32)
 }
+
+struct ConsLock {
+    lock: Spinlock,
+}
+
+static mut CONSLOCK: ConsLock = ConsLock {
+    lock: Spinlock::default(),
+};
+
 
 #[derive(Clone, Copy)]
 struct Input {
@@ -137,9 +149,11 @@ pub fn consoleread(_ip: usize, dst: &mut [u8], n: i32) -> i32 {
 
 pub fn consolewrite(_ip: usize, src: &[u8], n: i32) -> i32 {
     // Mirrors C: for(i = 0; i < n; i++) consputc(buf[i] & 0xff);
+    unsafe { acquire(&mut CONSLOCK.lock); }
     for i in 0..n {
         consputc(src[i as usize] as i32);
     }
+    unsafe { release(&mut CONSLOCK.lock); }
     n
 }
 
@@ -147,6 +161,7 @@ pub fn consoleinit() {
     // Register console device handlers in the device switch table
     // Mirrors C: devsw[CONSOLE].write = consolewrite; devsw[CONSOLE].read = consoleread;
     unsafe {
+        initlock(&mut CONSLOCK.lock, b"console\0".as_ptr());
         DEVSW[CONSOLE].read  = Some(consoleread);
         DEVSW[CONSOLE].write = Some(consolewrite);
     }

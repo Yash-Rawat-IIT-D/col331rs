@@ -5,6 +5,7 @@ use crate::bio;
 use crate::buf::{B_DIRTY, BSIZE};
 use crate::fs;
 use crate::param::LOGSIZE;
+use crate::spinlock::{Spinlock, acquire, release, initlock};
 
 #[derive(Copy, Clone)]
 struct LogHeader {
@@ -22,6 +23,7 @@ impl LogHeader {
 }
 
 struct Log {
+    lock: Spinlock,
     start: u32,
     size: u32,
     committing: bool,
@@ -32,6 +34,7 @@ struct Log {
 impl Log {
     const fn new() -> Self {
         Self {
+            lock: Spinlock::new(),
             start: 0,
             size: 0,
             committing: false,
@@ -147,7 +150,7 @@ pub fn initlog(dev: u32) {
     if size_of::<LogHeader>() >= BSIZE {
         panic!("initlog: too big logheader");
     }
-
+    initlock(unsafe { &mut LOG.lock }, b"log\0".as_ptr());
     let mut sb = fs::Superblock::new();
     fs::readsb(dev, &mut sb);
     unsafe {
@@ -167,6 +170,9 @@ pub fn end_op() {
 pub fn log_write(idx: usize) {
     unsafe {
         let blockno = bio::buf_mut(idx).blockno;
+
+        acquire(&mut LOG.lock);
+
         if LOG.lh.n as usize >= LOGSIZE || LOG.lh.n as u32 >= LOG.size.saturating_sub(1) {
             panic!("too big a transaction");
         }
@@ -183,7 +189,7 @@ pub fn log_write(idx: usize) {
         if i == LOG.lh.n as usize {
             LOG.lh.n += 1;
         }
-
+        release(&mut LOG.lock);
         bio::buf_mut(idx).flags.fetch_or(B_DIRTY, Ordering::AcqRel);
     }
 }

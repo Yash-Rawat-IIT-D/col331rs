@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
+use crate::file::fileinit;
 use crate::x86::cli;
 use crate::lapic::lapicid;
 
@@ -31,6 +32,8 @@ mod vm;
 mod spinlock;
 mod kalloc;
 mod exec;
+mod spinlock;
+mod sysproc;
 
 use crate::traps::*;
 use crate::constants::PHYSTOP;
@@ -131,6 +134,7 @@ pub extern "C" fn entryofrust() -> ! {
     ide::ideinit();
     tvinit();
     bio::binit();
+    fileinit();
     idtinit();
     x86::sti();
     fs::iinit(param::ROOTDEV);

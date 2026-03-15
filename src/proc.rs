@@ -9,6 +9,7 @@ use crate::param::KSTACKSIZE;
 use crate::param::NPROC;
 use crate::param::NOFILE;
 use crate::kalloc::kalloc;
+use crate::spinlock::{Spinlock, initlock, acquire, release};
 use core::ptr::null_mut;
 // use core::cell::OnceCell;
 
@@ -78,11 +79,13 @@ impl Proc {
 
 // Process table
 struct PTable {
+    lock: Spinlock,
     proc: [Proc; NPROC],
 }
 
 // static mut PTABLE: OnceCell<PTable> = OnceCell::new();
 static mut PTABLE: PTable = PTable {
+    lock: Spinlock::new(),
     proc: [Proc::new(); NPROC],
 };
 static mut NEXTPID: i32 = 1;
@@ -145,16 +148,18 @@ extern "C" {
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
     unsafe {  
-       let ptable = &raw mut PTABLE;
+        acquire(&mut PTABLE.lock);
+        let ptable = &raw mut PTABLE;
         
         for p in &mut (*ptable).proc {
             // debug!("process : pid {}, state {:?}", p.pid, p.state);
             if p.state == ProcState::Unused {
                 // Found an unused process
                 // debug!("allocproc: found unused process with pid {}", p.pid);
-                p.state = ProcState::Embryo;
+                p.state = ProcState::Embryo;    // Reserved for initialization
                 p.pid = NEXTPID;
                 NEXTPID += 1;
+                release(&mut PTABLE.lock);
 
                 p.offset = kalloc();
                 if p.offset.is_null() {
@@ -181,18 +186,25 @@ fn allocproc() -> Option<&'static mut Proc> {
 
                 sp = sp.sub(core::mem::size_of::<TrapFrame>());
                 p.tf = sp as *mut TrapFrame;
+                // Set up new context to start executing at trapret
+                // which returns to trapret
+                sp = sp.sub(4); 
 
+                unsafe {
+                    core::ptr::write(sp as *mut u32, trapret as u32);
+                }
+                
                 sp = sp.sub(core::mem::size_of::<Context>());
                 p.context = sp as *mut Context;
                 
                 // Initialize context
                 core::ptr::write_bytes(p.context, 0, 1);
-                (*p.context).eip = trapret as *const () as usize as u32;
+                (*p.context).eip = forkret as u32;
                 // debug!("allocproc: initialized process with pid {}", p.pid);
                 return Some(p);
             }
         }
-        
+        release(&mut PTABLE.lock);
         None
     }
 }
@@ -200,6 +212,7 @@ fn allocproc() -> Option<&'static mut Proc> {
 // Set up first process.
 pub fn pinit() {
     unsafe {
+        initlock(&mut PTABLE.lock, "ptable\0".as_ptr());
         extern "C" {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: u8;
@@ -255,6 +268,7 @@ pub fn scheduler() -> ! {
         
         // Loop over process table looking for process to run.
         unsafe {
+            acquire(&mut PTABLE.lock);
             let ptable = &raw mut PTABLE;
 
             for p in &mut (*ptable).proc {
@@ -271,6 +285,7 @@ pub fn scheduler() -> ! {
                 // Process is done running for now.
                 c.proc = null_mut();
             }
+            release(&mut PTABLE.lock);
         }
     }
 }
@@ -297,14 +312,22 @@ fn sched() {
 }
 
 pub fn r#yield() {
+    acquire(unsafe{ &mut PTABLE.lock });
     let p = myproc().expect("yield with no process");
     p.state = ProcState::Runnable;
     sched();
+    release(unsafe {&mut PTABLE.lock });
+}
+
+fn forkret() {
+    // Release the ptable lock held by scheduler
+    release(unsafe {&mut PTABLE.lock});
 }
 
 pub fn procdump() {
     unsafe {
-       let ptable = &raw mut PTABLE;
+        acquire(&mut PTABLE.lock);
+        let ptable = &raw mut PTABLE;
         for p in &(*ptable).proc {
             if p.state == ProcState::Unused {
                 continue;
@@ -319,5 +342,6 @@ pub fn procdump() {
             let name = core::str::from_utf8(&p.name[..name_len]).unwrap_or("???");
             crate::println!("{} {} {}", p.pid, state, name);
         }
+        release(&mut PTABLE.lock);
     }
 }

@@ -6,6 +6,7 @@ use crate::fcntl::{O_CREATE, O_RDONLY, O_RDWR, O_WRONLY};
 use crate::fs;
 use crate::log;
 use crate::param::{MAXOPBLOCKS, NFILE, NDEV};
+use crate::spinlock::{Spinlock, acquire, initlock, release};
 
 // Device switch table entry
 #[derive(Copy, Clone)]
@@ -57,12 +58,14 @@ impl File {
 
 struct FTable {
     file: [File; NFILE],
+    lock: Spinlock,
 }
 
 impl FTable {
     const fn new() -> Self {
         Self {
             file: [const { File::new() }; NFILE],
+            lock: Spinlock::new(),
         }
     }
 }
@@ -76,6 +79,7 @@ fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
 
 pub fn fileinit() {
     unsafe {
+        initlock(&mut FTABLE.lock, "ftable\0".as_ptr());
         for i in 0..NFILE {
             FTABLE.file[i] = File::new();
         }
@@ -84,12 +88,15 @@ pub fn fileinit() {
 
 pub fn filealloc() -> Option<usize> {
     unsafe {
+        acquire(&mut FTABLE.lock);
         for i in 0..NFILE {
             if FTABLE.file[i].refcnt == 0 {
                 FTABLE.file[i].refcnt = 1;
+                release(&mut FTABLE.lock);
                 return Some(i);
             }
         }
+        release(&mut FTABLE.lock);
     }
     None
 }
@@ -110,6 +117,7 @@ pub fn file_set_inode(f_idx: usize, ip: usize, omode: i32) {
 
 pub fn filedup(f_idx: usize) -> usize {
     unsafe {
+        acquire(&mut FTABLE.lock);
         if f_idx >= NFILE {
             panic!("filedup: bad file index");
         }
@@ -117,6 +125,7 @@ pub fn filedup(f_idx: usize) -> usize {
             panic!("filedup");
         }
         FTABLE.file[f_idx].refcnt += 1;
+        release(&mut FTABLE.lock);
     }
     f_idx
 }
@@ -124,6 +133,7 @@ pub fn filedup(f_idx: usize) -> usize {
 pub fn fileclose(f_idx: usize) {
     let ff: File;
     unsafe {
+        acquire(&mut FTABLE.lock);
         if f_idx >= NFILE {
             panic!("fileclose: bad file index");
         }
@@ -134,11 +144,13 @@ pub fn fileclose(f_idx: usize) {
         }
         f.refcnt -= 1;
         if f.refcnt > 0 {
+            release(&mut FTABLE.lock);
             return;
         }
 
         ff = *f;
         *f = File::new();
+        release(&mut FTABLE.lock);
     }
 
     if ff.type_ == FileType::Inode {
