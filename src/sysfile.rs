@@ -175,13 +175,12 @@ pub fn sys_open() -> i32 {
 pub fn sys_exec() -> i32 {
     let mut path: *const u8 = core::ptr::null();
     let mut uargv: i32 = 0;
-    let mut uarg: u32;
+    let mut uarg: i32;
     let mut argv: [*const u8; MAXARG] = [core::ptr::null(); MAXARG];
     let len_path = argstr(0, &mut path);
     if  len_path < 0 || argint(1, &mut uargv) < 0 {
         return -1;
     }
-
     let mut i = 0;
 
     loop {
@@ -190,16 +189,17 @@ pub fn sys_exec() -> i32 {
         }
 
         uarg = 0;
-        if fetchint((uargv as u32) + 4 * i as u32, &mut (uarg as i32)) < 0 {
+     
+        if fetchint((uargv as u32) + 4 * i as u32, &mut uarg) < 0 {
             return -1;
         }
-
+    
         if uarg == 0 {
             argv[i] = core::ptr::null();
             break;
         }
 
-        if fetchstr(uarg, &mut argv[i]) < 0 {
+        if fetchstr(uarg as u32, &mut argv[i]) < 0 {
             return -1;
         }
 

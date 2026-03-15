@@ -11,14 +11,17 @@ pub fn fetchint(addr: u32, ip: &mut i32) -> i32 {
         Some(v) => v,
         None => return -1,
     };
+
     if addr >= curproc.sz || end > curproc.sz {
         return -1;
     }
 
     unsafe {
+        // offset is a base pointer to the mapped user memory
         let ptr = curproc.offset.add(addr as usize) as *const i32;
         *ip = core::ptr::read_unaligned(ptr);
     }
+
     0
 }
 
@@ -54,16 +57,23 @@ pub fn argint(n: i32, ip: &mut i32) -> i32 {
         Some(p) => p,
         None => return -1,
     };
+
     if curproc.tf.is_null() {
         return -1;
     }
 
     let esp = unsafe { (*curproc.tf).esp };
-    let arg_off = match (n as u32).checked_mul(4) {
+
+    // Compute address of nth argument on user stack
+    let addr = match esp
+        .checked_add(4)                       // skip saved PC
+        .and_then(|v| v.checked_add((n as u32) * 4))
+    {
         Some(v) => v,
         None => return -1,
     };
-    fetchint(esp.wrapping_add(4).wrapping_add(arg_off), ip)
+
+    fetchint(addr, ip)
 }
 
 pub fn argptr(n: i32, pp: &mut *const u8, size: i32) -> i32 {
