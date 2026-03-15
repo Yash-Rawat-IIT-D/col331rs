@@ -60,31 +60,23 @@ xv6.img: bootblock kernel
 mkfs: src/mkfs.rs
 	rustc -W warnings -o mkfs src/mkfs.rs
 
-# User Library Programs Pipeline
-ULIB = usys.o
+# User programs (C version)
+
+ULIB = usys.o printf.o
 
 usys.o: usys.S
 	$(CC) $(CFLAGS) -c -o usys.o usys.S
 
+printf.o: printf.c
+	$(CC) $(CFLAGS) -c -o printf.o printf.c
 
-# Build user programs with Cargo so core is available
-user_build:
-	cargo rustc \
-		-Z build-std=core \
-		-Z json-target-spec \
-		--manifest-path user/Cargo.toml \
-		--target ./targets/i686.json \
-		--release \
-		-- --emit=obj
+init.o: init.c
+	$(CC) $(CFLAGS) -c -o init.o init.c
 
-_init: user_build usys.o
-	@tdir=$$(cargo metadata --manifest-path user/Cargo.toml --format-version=1 --no-deps | sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p'); \
-	lib=$$(find "$$tdir" -name 'libuserprog.a' | head -n 1); \
-	if [ -z "$$lib" ]; then echo "ERROR: libuserprog.a not found"; exit 1; fi; \
-	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o _init $$lib usys.o; \
-	$(OBJDUMP) -S _init > init.asm; \
+_init: init.o $(ULIB)
+	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o _init $^
+	$(OBJDUMP) -S _init > init.asm
 	$(OBJDUMP) -t _init | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > init.sym
-
 
 UPROGS=\
 	_init
