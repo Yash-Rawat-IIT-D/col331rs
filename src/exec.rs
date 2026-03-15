@@ -47,7 +47,7 @@ pub const ELF_PROG_LOAD: u32 = 1;
 pub fn exec(path: &[u8], argv: &[*const u8]) -> i32 {
     let mut elf: ElfHdr = Default::default();
     let mut ph: ProgHdr = Default::default();
-    let mut offset;
+    let offset;
     let mut usp: u32;
     let mut ustack = [0u32; 3 * MAXARG + 1];
 
@@ -71,7 +71,7 @@ pub fn exec(path: &[u8], argv: &[*const u8]) -> i32 {
     if ip_opt.is_none() {
         log::end_op();
         println!("exec: fail");
-        unsafe { kalloc::kfree(offset); }
+        kalloc::kfree(offset);
         return -1;
     }
 
@@ -79,12 +79,12 @@ pub fn exec(path: &[u8], argv: &[*const u8]) -> i32 {
     fs::iread(ip_idx);
 
     // Avoid GOTO, Helper to cleanup and return
-    let mut bad = || -> i32 {
+    let bad = || -> i32 {
         // if(ip_idx != 0) {
         fs::iput(ip_idx);
         log::end_op();
         // }
-        unsafe { kalloc::kfree(offset); }
+        kalloc::kfree(offset);
         -1
     };
 
@@ -163,7 +163,7 @@ pub fn exec(path: &[u8], argv: &[*const u8]) -> i32 {
     let mut argc = 0;
     while argc < argv.len() && !argv[argc].is_null() {
         if argc >= MAXARG {
-            unsafe { kalloc::kfree(offset); }
+            kalloc::kfree(offset);
             return -1;
         }
         // find length of string
@@ -205,9 +205,7 @@ pub fn exec(path: &[u8], argv: &[*const u8]) -> i32 {
     }
 
     // Free the old address space
-    unsafe {
-        kalloc::kfree(proc.offset as *mut u8);
-    }
+    kalloc::kfree(proc.offset as *mut u8);
     proc.offset = offset;
     vm::switchuvm(proc);
     

@@ -90,9 +90,9 @@ pub fn argptr(n: i32, pp: &mut *const u8, size: i32) -> i32 {
         return -1;
     }
 
-    unsafe {
-        *pp = base as *const u8;
-    }
+    
+    *pp = base as *const u8;
+
     0
 }
 
