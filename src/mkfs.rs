@@ -43,14 +43,11 @@ const LOGSIZE: u32 = 0;              // max data blocks in on-disk log
 const T_DIR: u16 = 1;                 // Directory
 const T_FILE: u16 = 2;                // File
 
-// ============================================================================
-// FILESYSTEM STRUCTURES (Duplicated from src/fs.rs)
-// ============================================================================
-// In C: These are defined in fs.h and included by both kernel and mkfs.c
-// In Rust: Canonical definitions are in src/fs.rs (for kernel)
-//          Duplicated here because mkfs is a standalone host binary
-// ============================================================================
-
+// Disk layout:
+// [ boot block | super block | log | inode blocks | free bit map | data blocks]
+//
+// mkfs computes the super block and builds an initial file system. The
+// super block describes the disk layout:
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
 struct Superblock {
