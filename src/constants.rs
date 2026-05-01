@@ -53,7 +53,6 @@ pub const IRQ_COM1: u32 = 4;
 pub const IRQ_IDE: u32 = 14;
 pub const IRQ_ERROR: u32 = 19;
 pub const IRQ_SPURIOUS: u32 = 31;
-pub const IDE_TRAP: u32 = T_IRQ0 + IRQ_IDE;
 // ------------------------------------------------------ MP RELATED  -------------------------------------------------------
 
 // Processor flags
@@ -142,9 +141,9 @@ pub const BPB: usize = BSIZE * 8;     // bitmap bits per block
 pub const MAXOPBLOCKS: usize = 10;    // max # of blocks any FS op writes
 pub const NINODE: usize = 50;         // maximum number of active i-nodes
 pub const ROOTDEV: u32 = 1;           // device number of file system root disk
-pub const LOGSIZE: u32 = 0;          // max data blocks in on-disk log (C version: 0, extended version: 30)
+pub const LOGSIZE: u32 = 0;          // max data blocks in on-disk log
 pub const NBUF: usize = MAXOPBLOCKS * 3;  // size of disk block cache
-pub const FSSIZE: u32 = 1000;        // size of file system in blocks (C version: 1000, extended: 10000)
+pub const FSSIZE: u32 = 1000;        // size of file system in blocks
 pub const NINODES: u32 = 200;         // number of inodes in file system
 
 // ------------------------------------------------------ FILE TYPES (stat.h) ----------------------------------------------

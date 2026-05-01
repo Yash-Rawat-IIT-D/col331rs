@@ -235,7 +235,7 @@ pub fn isdirempty(dp_idx: usize) -> bool {
     true
 }
 
-pub fn unlink(path: &str, name: &mut [u8; DIRSIZ]) -> i32 {
+pub fn unlink(path: &str, name: [u8; DIRSIZ]) -> i32 {
     let dp = match fs::nameiparent(path, name) {
         Some(idx) => idx,
         None => return -1,

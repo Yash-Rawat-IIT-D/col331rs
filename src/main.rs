@@ -3,6 +3,7 @@
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
+use crate::constants::{DIRENT_SIZE, DIRSIZ};
 use crate::x86::cli;
 use crate::lapic::lapicid;
 
@@ -25,73 +26,61 @@ mod file;
 mod fcntl;
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
-        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
-    }
-}
-
-fn print_cstr(bytes: &[u8]) {
-    for &ch in bytes {
-        if ch == 0 {
-            break;
-        }
-        console::consputc(ch as i32);
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
 fn welcome() {
+    // Create /foo
     let _ = file::create("/foo", constants::T_DIR as i16, 0, 0);
 
+    // Write /foo/hello.txt
     let gtxt = file::open("/foo/hello.txt", fcntl::O_CREATE | fcntl::O_WRONLY)
         .unwrap_or_else(|| panic!("failed to create /foo/hello.txt"));
     let n = file::filewrite(gtxt, b"hello\0", 6);
     println!("Wrote {} characters to /foo/hello.txt", n);
     file::fileclose(gtxt);
 
+    // Read /foo/hello.txt
     let gtxt = file::open("/foo/hello.txt", fcntl::O_RDONLY)
         .unwrap_or_else(|| panic!("unable to open /foo/hello.txt"));
     let mut welcome = [0u8; 512];
     let n = file::fileread(gtxt, &mut welcome, 6);
     println!("Read {} chars from /foo/hello.txt: ", n);
-    print_cstr(&welcome);
-    console::consputc('\n' as i32);
+    println!("{}\n", core::str::from_utf8(&welcome).unwrap_or("?"));
     file::fileclose(gtxt);
 
-    let mut name = [0u8; constants::DIRSIZ];
-    if file::unlink("/foo/hello.txt", &mut name) < 0 {
+    // Delete /foo/hello.txt
+    let mut name: [u8; DIRSIZ] = [0; DIRSIZ];
+    name[..9].copy_from_slice(b"hello.txt");
+    if file::unlink("/foo/", name) < 0 {
         panic!("failed to unlink /foo/hello.txt");
     }
 
+    // Check that /foo is empty
     let foo = fs::namei("/foo").unwrap_or_else(|| panic!("unable to open /foo"));
     if !file::isdirempty(foo) {
         panic!("/foo should be empty");
     }
     fs::iput(foo);
 
+    // Check that we cannot read file /foo/hello.txt
     if let Some(f) = file::open("/foo/hello.txt", fcntl::O_RDONLY) {
         file::fileclose(f);
         panic!("could open /foo/hello.txt after unlinking");
     }
 
+    // Write to /welcome.txt
     let wtxt =
         file::open("/welcome.txt", fcntl::O_RDONLY).unwrap_or_else(|| panic!("unable to open /welcome.txt"));
     let welcome_cap = welcome.len() as i32;
     let n = file::fileread(wtxt, &mut welcome, welcome_cap);
     println!("Read {} chars from /welcome.txt:", n);
-    print_cstr(&welcome);
+    println!("{}\n", core::str::from_utf8(&welcome).unwrap_or("?"));
     file::fileclose(wtxt);
 }
 
@@ -120,15 +109,9 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
-static mut PANICKED: bool = false;
-
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // Disable interrupts to prevent interrupt handlers from interfering
-    cli();
-    // Print panic message with LAPIC ID to identify which CPU panicked
-    println!("lapicid {}:\n{:#?}", lapicid(), info);
-    unsafe { PANICKED = true; }
-    // Halt the system
-    loop {}
+    println!("Kernel Panic: {:?}", info);
+    halt()
 }

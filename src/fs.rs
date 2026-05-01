@@ -295,6 +295,11 @@ pub fn ialloc(dev: u32, type_: i16) -> usize {
     panic!("ialloc: no inodes");
 }
 
+// Truncate inode (discard contents).
+// Only called when the inode has no links
+// to it (no directory entries referring to it)
+// and has no in-memory reference to it (is
+// not an open file or current directory).
 fn itrunc(idx: usize) {
     unsafe {
         if idx >= NINODE {
@@ -334,6 +339,13 @@ fn itrunc(idx: usize) {
     iupdate(idx);
 }
 
+// Drop a reference to an in-memory inode.
+// If that was the last reference, the inode cache entry can
+// be recycled.
+// If that was the last reference and the inode has no links
+// to it, free the inode (and its content) on disk.
+// All calls to iput() must be inside a transaction in
+// case it has to free the inode.
 pub fn iput(idx: usize) {
     unsafe {
         if idx >= NINODE {
@@ -414,6 +426,7 @@ pub fn iget(dev: u32, inum: u32) -> usize {
     }
 }
 
+// Read data from inode.
 pub fn iread(idx: usize) {
     unsafe {
         if idx >= NINODE {
@@ -450,6 +463,15 @@ pub fn iread(idx: usize) {
     }
 }
 
+// Inode content
+//
+// The content (data) associated with each inode is stored
+// in blocks on the disk. The first NDIRECT block numbers
+// are listed in ip->addrs[].  The next NINDIRECT blocks are
+// listed in block ip->addrs[NDIRECT].
+
+// Return the disk block address of the nth block in inode ip.
+// If there is no such block, bmap allocates one.
 fn bmap(idx: usize, bn: u32) -> u32 {
     unsafe {
         if idx >= NINODE {
@@ -508,6 +530,7 @@ pub fn stati(idx: usize, st: &mut Stat) {
     }
 }
 
+// Read data from inode.
 pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
     unsafe {
         if idx >= NINODE {
@@ -549,6 +572,7 @@ pub fn readi(idx: usize, dst: &mut [u8], off: u32, n: u32) -> i32 {
     }
 }
 
+// Write data to inode.
 pub fn writei(idx: usize, src: &[u8], off: u32, n: u32) -> i32 {
     unsafe {
         if idx >= NINODE {
@@ -666,10 +690,13 @@ pub fn inode_dec_nlink(idx: usize) {
     }
 }
 
+/// Directories
 pub fn namecmp(s: &str, t: &[u8; DIRSIZ]) -> bool {
     name_to_dirsiz(s) == *t
 }
 
+// Look for a directory entry in a directory.
+// If found, set *poff to byte offset of entry.
 pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Option<usize> {
     if dp_idx >= NINODE {
         panic!("dirlookup: bad inode index");
@@ -702,6 +729,7 @@ pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Optio
     None
 }
 
+// Write a new directory entry (name, inum) into the directory dp.
 pub fn dirlink(dp_idx: usize, name: &str, inum: u32) -> i32 {
     if let Some(ip_idx) = dirlookup(dp_idx, name, None) {
         iput(ip_idx);
@@ -736,7 +764,20 @@ pub fn dirlink(dp_idx: usize, name: &str, inum: u32) -> i32 {
     0
 }
 
-fn skipelem(path: &[u8], mut i: usize, name: &mut [u8; DIRSIZ]) -> Option<usize> {
+// Copy the next path element from path into name.
+// Return a pointer to the element following the copied one.
+// The returned path has no leading slashes,
+// so the caller can check *path=='\0' to see if the name is the last one.
+// If no name to remove, return 0.
+//
+// Examples:
+//   skipelem("a/bb/c", name) = "bb/c", setting name = "a"
+//   skipelem("///a//bb", name) = "bb", setting name = "a"
+//   skipelem("a", name) = "", setting name = "a"
+//   skipelem("", name) = skipelem("////", name) = 0
+//
+fn skipelem(path: &[u8], mut i: usize, name: &mut str) -> Option<usize> {
+    let name = unsafe{ name.as_bytes_mut() };
     while i < path.len() && path[i] == b'/' {
         i += 1;
     }
@@ -764,10 +805,11 @@ fn skipelem(path: &[u8], mut i: usize, name: &mut [u8; DIRSIZ]) -> Option<usize>
     Some(i)
 }
 
-fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize> {
+fn namex(path: &str, nameiparent: bool, name: &str) -> Option<usize> {
     let bytes = path.as_bytes();
     let mut path_idx = 0usize;
     let mut ip = iget(ROOTDEV, ROOTINO);
+    let name: &mut str = name.clone();
 
     while let Some(next_idx) = skipelem(bytes, path_idx, name) {
         path_idx = next_idx;
@@ -784,7 +826,7 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
             return Some(ip);
         }
 
-        let elem = core::str::from_utf8(name).unwrap_or("");
+        let elem = core::str::from_utf8(&name).unwrap_or("");
         let trimmed = elem.trim_end_matches('\0');
         let next = match dirlookup(ip, trimmed, None) {
             Some(x) => x,
@@ -806,12 +848,11 @@ fn namex(path: &str, nameiparent: bool, name: &mut [u8; DIRSIZ]) -> Option<usize
 
 /// Look up the inode for a path name.
 pub fn namei(path: &str) -> Option<usize> {
-    let mut name = [0u8; DIRSIZ];
-    namex(path, false, &mut name)
+    namex(path, false, "")
 }
 
 /// Look up the parent inode for a path name.
 /// Copy the final path element into name.
-pub fn nameiparent(path: &str, name: &mut [u8; DIRSIZ]) -> Option<usize> {
+pub fn nameiparent(path: &str, name: &str) -> Option<usize> {
     namex(path, true, name)
 }
