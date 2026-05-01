@@ -66,8 +66,9 @@ xv6.img: bootblock kernel
 	dd if=kernel of=xv6.img seek=1 conv=notrunc
 
 # Build mkfs utility and create filesystem image
-mkfs: src/mkfs.rs
-	rustc -W warnings -o mkfs src/mkfs.rs
+mkfs: src/mkfs.rs src/fs_h.rs
+	rustc --edition=2021 -W warnings -o mkfs src/mkfs.rs 
+	
 
 fs.img: mkfs *.txt
 	./mkfs fs.img *.txt
@@ -83,6 +84,7 @@ kernel.a: $(RS)
 	cargo +nightly rustc \
 		-Z build-std=core \
 		-Z build-std-features=compiler-builtins-mem \
+		-Zjson-target-spec \
 		--target ./targets/i686-stage-3.json \
 		--lib --release \
 		-- -A warnings --emit link=kernel.a

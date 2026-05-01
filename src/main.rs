@@ -16,6 +16,7 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
+mod fs_h;
 mod constants;  // Internal use only - no external crates
 mod fs;         // Internal use only - filesystem structures
 mod buf;
