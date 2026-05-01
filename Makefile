@@ -1,11 +1,29 @@
 OBJS = entry.o vectors.o trapasm.o
 RS = src/*.rs
 
+# Cross-compiling (e.g., on Mac OS X)
+#TOOLPREFIX = i386-jos-elf
+#TOOLPREFIX = i386-elf-
+
+# Using native tools (e.g., on X86 Linux)
+#TOOLPREFIX = 
+
+MAC_CCFLAGS := $(shell if [ "$(shell uname -s)" = "Darwin" ] && [ "$(shell uname -m)" = "arm64" ]; then \
+	echo "-Wno-error=infinite-recursion -Wno-error=array-bounds"; \
+	else \
+	echo ""; \
+fi)
+
+# Try to infer the correct TOOLPREFIX if not set
 ifndef TOOLPREFIX
 TOOLPREFIX := $(shell if i386-jos-elf-objdump -i 2>&1 | grep '^elf32-i386$$' >/dev/null 2>&1; \
 	then echo 'i386-jos-elf-'; \
 	elif objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
 	then echo ''; \
+	elif i686-elf-objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
+	then echo 'i686-elf-'; \
+	elif i386-elf-objdump -i 2>&1 | grep 'elf32-i386' >/dev/null 2>&1; \
+	then echo 'i386-elf-'; \
 	else echo "***" 1>&2; \
 	echo "*** Error: Couldn't find an i386-*-elf version of GCC/binutils." 1>&2; \
 	exit 1; fi)
@@ -28,6 +46,7 @@ OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
 CFLAGS = -fno-pic -static -fno-builtin -fno-strict-aliasing -O2 -Wall -MD -ggdb -m32 -Werror -fno-omit-frame-pointer
+CFLAGS += $(MAC_CCFLAGS)
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
 ASFLAGS = -m32 -gdwarf-2 -Wa,-divide
@@ -57,8 +76,7 @@ kernel.a: $(RS)
 	cargo +nightly rustc \
 		-Z build-std=core \
 		-Z build-std-features=compiler-builtins-mem \
-		-Z json-target-spec \
-		--target ./targets/i686.json \
+		--target ./targets/i686-stage-3.json \
 		--lib --release \
 		-- -A warnings --emit link=kernel.a
 
@@ -70,13 +88,17 @@ kernel: kernel.a $(OBJS) ./linkers/kernel.ld
 vectors.S: vectors.pl
 	./vectors.pl > vectors.S
 
+# Prevent deletion of intermediate files, e.g. cat.o, after first build, so
+# that disk image changes after first build are persistent until clean.  More
+# details:
+# http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
 .PRECIOUS: %.o
 -include *.d
 
 clean:
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
-	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img .gdbinit vectors.S
-	rm -rf target
+	*.a *.o *.d *.asm *.sym bootblock kernel xv6.img .gdbinit
+	cargo clean
 
 GDBPORT = $(shell expr `id -u` % 5000 + 25000)
 QEMUGDB = $(shell if $(QEMU) -help | grep -q '^-gdb'; \

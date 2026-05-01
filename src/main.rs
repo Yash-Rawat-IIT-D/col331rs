@@ -17,16 +17,6 @@ mod constants;
 
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
@@ -54,6 +44,7 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("Kernel Panic: {:?}", info);
