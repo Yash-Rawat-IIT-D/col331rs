@@ -2,7 +2,7 @@ use core::cmp::min;
 
 use crate::bio;
 use crate::buf::BSIZE;
-use crate::fs_h::{self, DINODE_SIZE, DIRSIZ, IPB, NDIRECT, NINDIRECT, Superblock, T_DIR};
+use crate::fs_h::{self, BPB, DINODE_SIZE, DIRSIZ, IPB, MAXFILE, NDIRECT, NINDIRECT, Superblock, T_DIR};
 use crate::param::NINODE;
 use crate::println;
 
