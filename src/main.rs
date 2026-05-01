@@ -19,21 +19,11 @@ mod bio;
 mod ide;
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);
-        x86::outw(0xB004, 0x2000);
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
@@ -43,7 +33,7 @@ fn welcome() {
 
     for &byte in data0.iter() {
         if byte == 0 { break; }
-        console::consputc(byte as char);
+        console::consputc(byte);
     }
     bio::brelse(b0);
 
@@ -80,8 +70,9 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("Kernel Panic: {:?}", info);
-    loop {}
+    halt()
 }
