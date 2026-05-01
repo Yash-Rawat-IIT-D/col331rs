@@ -199,7 +199,7 @@ pub fn mpinit() {
   let mut p = (mp.physaddr as usize + mem::size_of::<MpConf>()) as *const u8;
   let e = (mp.physaddr as usize + conf.length as usize) as *const u8;
   
-  let mut ncpu = 0; 
+  let mut ncpu = 0;
   let mut cpus = [Cpu::new(); NCPU];
   
   while p < e {
@@ -211,20 +211,16 @@ pub fn mpinit() {
           cpus[ncpu].apicid = unsafe { (*proc).apicid };
           ncpu += 1;
         }
-        // p = unsafe { p.add(mem::size_of::<MpProc>()) };
-        // p = (p as usize + mem::size_of::<MpProc>()) as *const u8;
         p = p.wrapping_add(mem::size_of::<MpProc>());
       }
       MPIOAPIC => {
         let ioapic = p as *const MpIoApic;
         let ioapicid = unsafe { (*ioapic).apicno };
         MP_ONCE.ioapic_id.set(ioapicid);
-        // p = unsafe{ p.add(mem::size_of::<MpIoApic>()) };
         p = p.wrapping_add(mem::size_of::<MpIoApic>());
       }
       MPBUS | MPIOINTR | MPLINTR => {
         p = p.wrapping_add(8);
-        // p = unsafe { p.add(8) };
       }
       _ => {
         ismp = false;
@@ -234,7 +230,7 @@ pub fn mpinit() {
   }
 
   if !ismp {
-    panic!("Didn't find a suitable machine");
+      panic!("Didn't find a suitable machine");
   }
   MP_ONCE.cpus.set(cpus);
 

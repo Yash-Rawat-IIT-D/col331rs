@@ -55,6 +55,17 @@ is little endian for `0x10000C`. In `kernel.asm`, we can see that `entry` is
 located at the address `0x10000c`.
 
 ### OS 
-`entry.S` finally sets up a 4KB stack for the OS and jumps to `main()` method
-defined by `main.c`. `main.c` just exits by sending a special word indicating
-shutdown to QEMU.
+`entry.S` finally sets up a 4KB stack for the OS and jumps to `entryofrust()`
+method defined by `main.rs`. `main.rs` just exits by sending a special word
+indicating shutdown to QEMU.
+
+### Rust specifics
+
+`targets/i686-stage-3.json` tells the Rust compiler what to target. 
+TODO: explain data-layout
+
+TODO: explain parameters
+cargo rustc -Z build-std=core --target ./targets/i686-stage-3.json --lib --release -- --emit link=kernel.a
+
+* core is needed for inline assembly. We import core::arch::asm in main.rs
+* --lib is saying don't yet link it into an executable. We will link it later into an executable.
