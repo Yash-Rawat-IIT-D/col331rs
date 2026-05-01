@@ -2,37 +2,12 @@ use core::cmp::min;
 
 use crate::bio;
 use crate::buf::BSIZE;
+use crate::fs_h::{self, DINODE_SIZE, DIRSIZ, IPB, NDIRECT, NINDIRECT, Superblock, T_DIR};
 use crate::param::NINODE;
 use crate::println;
-use crate::constants::{NDIRECT, NINDIRECT, DIRSIZ, DIRENT_SIZE, DINODE_SIZE, IPB, T_DIR};
 
-pub use crate::constants::ROOTINO;
-
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Superblock {
-    pub size: u32,
-    pub nblocks: u32,
-    pub ninodes: u32,
-    pub nlog: u32,
-    pub logstart: u32,
-    pub inodestart: u32,
-    pub bmapstart: u32,
-}
-
-impl Superblock {
-    pub const fn new() -> Self {
-        Self {
-            size: 0,
-            nblocks: 0,
-            ninodes: 0,
-            nlog: 0,
-            logstart: 0,
-            inodestart: 0,
-            bmapstart: 0,
-        }
-    }
-}
+pub use crate::fs_h::{Dirent, ROOTINO};
+pub const DIRENT_SIZE: usize = core::mem::size_of::<Dirent>();
 
 #[repr(C)]
 pub struct Inode {
@@ -87,22 +62,6 @@ impl Stat {
     }
 }
 
-#[derive(Copy, Clone)]
-#[repr(C)]
-pub struct Dirent {
-    pub inum: u16,
-    pub name: [u8; DIRSIZ],
-}
-
-impl Dirent {
-    pub const fn new() -> Self {
-        Self {
-            inum: 0,
-            name: [0; DIRSIZ],
-        }
-    }
-}
-
 struct ICache {
     inode: [Inode; NINODE],
 }
@@ -135,7 +94,7 @@ fn read_u32_le(data: &[u8], off: usize) -> u32 {
 
 #[inline]
 fn iblock(inum: u32, sb: &Superblock) -> u32 {
-    inum / (IPB as u32) + sb.inodestart
+    fs_h::iblock(inum, sb)
 }
 
 pub fn parse_dirent(raw: &[u8]) -> Dirent {
