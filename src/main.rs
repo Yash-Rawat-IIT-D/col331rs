@@ -23,27 +23,16 @@ mod bio;
 mod ide;
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
-        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
 fn welcome() {
     // Read boot counter from block 0 of device 1 (fs.img)
-    // Changed from block 1 to block 0 to match C version (p7-mkfs)
     let b1 = bio::bread(1, 0);
     let count = bio::buf_mut(b1).data[0];
 
@@ -78,15 +67,9 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
-static mut PANICKED: bool = false;
-
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // Disable interrupts to prevent interrupt handlers from interfering
-    cli();
-    // Print panic message with LAPIC ID to identify which CPU panicked
-    println!("lapicid {}:\n{:#?}", lapicid(), info);
-    unsafe { PANICKED = true; }
-    // Halt the system
-    loop {}
+    println!("Kernel Panic: {:?}", info);
+    halt()
 }

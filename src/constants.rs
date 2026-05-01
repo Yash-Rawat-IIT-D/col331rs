@@ -58,7 +58,6 @@ pub const IRQ_COM1: u32 = 4;
 pub const IRQ_IDE: u32 = 14;
 pub const IRQ_ERROR: u32 = 19;
 pub const IRQ_SPURIOUS: u32 = 31;
-pub const IDE_TRAP: u32 = T_IRQ0 + IRQ_IDE;
 // ------------------------------------------------------ MP RELATED  -------------------------------------------------------
 
 // Processor flags

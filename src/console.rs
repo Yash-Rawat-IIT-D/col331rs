@@ -1,23 +1,21 @@
 use crate::uart::*;
 use core::fmt::*;
-pub struct Console {}
 
+pub struct Console {}
 impl Write for Console {
     fn write_str(&mut self, s: &str) -> Result {
-        for c in s.chars() {
-            consputc(c as i32);
+         for c in s.chars() {
+            consputc(c as u8);
         }
         Ok(())
     }
 }
 
-const BACKSPACE: i32 = 0x100;
+const BACKSPACE: u8 = '\x08' as u8;
 const INPUT_BUF: usize = 128;
-const CTRL_D: i32 = C('D');
 
-#[allow(non_snake_case)]
-const fn C(c: char) -> i32 {
-    (c as i32) - ('@' as i32)
+const fn ctrl(x: char) -> u8 {  // Control-x
+    (x as u8) - ('@' as u8)
 }
 
 #[derive(Clone, Copy)]
@@ -35,50 +33,57 @@ static mut INPUT: Input = Input {
     e: 0,
 };
 
-pub fn consputc(c: i32) {
-    if c == BACKSPACE {
-        uartputc('\x08' as i32);
-        uartputc(' ' as i32);
-        uartputc('\x08' as i32);
-    } else {
-        uartputc(c);
-    }
-}
-
-pub fn consoleintr(getc: fn() -> i32) {
+pub fn consoleintr(getc: fn() -> Option<u8>) {
     loop {
-        let c = getc();
-        if c < 0 {
-            break;
-        }
+        let c_opt = getc();
+        let input = unsafe { &mut INPUT };
 
-        unsafe {
-            let input = &raw mut INPUT;
+        if let Some(c) = c_opt {
             match c {
-                x if x == C('U') => {
-                    while (*input).e != (*input).w && (*input).buf[((*input).e - 1) % INPUT_BUF] != b'\n' {
-                        (*input).e -= 1;
+                x if x == ctrl('U') => {
+                    while input.e != input.w && input.buf[(input.e - 1) % INPUT_BUF] != b'\n' {
+                        input.e -= 1;
                         consputc(BACKSPACE);
                     }
                 }
-                x if x == C('H') || x == 0x7f => {
-                    if (*input).e != (*input).w {
-                        (*input).e -= 1;
+                x if x == ctrl('H') || x == 0x7f => {
+                    if input.e != input.w {
+                        input.e -= 1;
                         consputc(BACKSPACE);
                     }
                 }
                 _ => {
-                    if c != 0 && (*input).e.wrapping_sub((*input).r) < INPUT_BUF {
-                        let c = if c == '\r' as i32 { '\n' as i32 } else { c };
-                        (*input).buf[(*input).e % INPUT_BUF] = c as u8;
-                        (*input).e += 1;
+                    if c != 0 && input.e.wrapping_sub(input.r) < INPUT_BUF {
+                        let c = if c == b'\r' { b'\n' } else { c };
+                        input.buf[input.e % INPUT_BUF] = c as u8;
+                        input.e += 1;
                         consputc(c);
-                        if c == '\n' as i32 || c == CTRL_D || (*input).e == (*input).r + INPUT_BUF {
-                            (*input).w = (*input).e;
+                        if c == b'\n' || c == ctrl('D') || input.e == input.r + INPUT_BUF {
+                            input.w = input.e;
                         }
                     }
                 }
             }
         }
+    }
+}
+
+#[macro_export]
+macro_rules! println {
+    ($($arg:tt)*) => ({
+        use core::fmt::*;
+        use crate::console::Console;
+        let mut c = Console {};
+        let _ = writeln!(&mut c, $($arg)*);
+    });
+}
+
+pub fn consputc(c: u8) {
+    if c == BACKSPACE {
+        uartputc(BACKSPACE as char);
+        uartputc(' ');
+        uartputc(BACKSPACE as char);
+    } else {
+        uartputc(c as char);
     }
 }
