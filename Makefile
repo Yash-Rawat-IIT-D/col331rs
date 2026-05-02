@@ -86,7 +86,6 @@ kernel.a: $(RS)
 	cargo +nightly rustc \
 		-Z build-std=core \
 		-Z build-std-features=compiler-builtins-mem \
-		-Zjson-target-spec \
 		--target ./targets/i686-stage-3.json \
 		--lib --release \
 		-- -A warnings --emit link=kernel.a
