@@ -235,9 +235,14 @@ pub fn isdirempty(dp_idx: usize) -> bool {
 }
 
 pub fn unlink(path: &str) -> i32 {
+    crate::log::begin_op();
+
     let (dp, name) = match fs::nameiparent(path) {
         Some(x) => x,
-        None => return -1,
+        None => {
+            crate::log::end_op();
+            return -1;
+        }
     };
 
     fs::iread(dp);
@@ -290,7 +295,7 @@ pub fn unlink(path: &str) -> i32 {
     0
 }
 
-pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
+fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     let (dp, name) = fs::nameiparent(path)?;
     fs::iread(dp);
 

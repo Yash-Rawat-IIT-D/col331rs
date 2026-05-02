@@ -25,7 +25,7 @@ pub const BPB: usize = BSIZE * 8; // bitmap bits per block
 
 pub const FSSIZE: u32 = 1000; // size of file system in blocks
 pub const NINODES: u32 = 200; // number of inodes
-pub const LOGSIZE: u32 = 0; // max data blocks in on-disk log
+pub const LOGSIZE: u32 = 30; // max data blocks in on-disk log
 
 pub const T_DIR: u16 = 1; // directory
 pub const T_FILE: u16 = 2; // file
