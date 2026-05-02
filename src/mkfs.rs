@@ -6,7 +6,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::mem::size_of;
 use std::path::Path;
 
-use fs_h::{BPB, BSIZE, DIRSIZ, Dinode, Dirent, FSSIZE, IPB, LOGSIZE, MAXFILE, NDIRECT, NINODES, ROOTINO, Superblock, T_DIR, T_FILE};
+use fs_h::{BPB, BSIZE, Dinode, Dirent, FSSIZE, IPB, LOGSIZE, MAXFILE, NDIRECT, NINODES, ROOTINO, Superblock, T_DIR, T_FILE};
 
 struct Mkfs {
 	fsfd: File,
@@ -29,13 +29,9 @@ fn from_bytes<T: Copy>(bytes: &[u8]) -> T {
 }
 
 fn name_to_dirent(name: &str, inum: u16) -> Dirent {
-	let mut de = Dirent {
-		inum: inum.to_le(),
-		..Default::default()
-	};
-	let name_bytes = name.as_bytes();
-	let copy_len = name_bytes.len().min(DIRSIZ);
-	de.name[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+	let mut de = Dirent::new();
+	de.inum = inum.to_le();
+	de.set_name(name);
 	de
 }
 

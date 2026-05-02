@@ -1,4 +1,6 @@
+use core::cmp::min;
 use core::mem::size_of;
+use core::str;
 
 // On-disk file system format.
 // Both the kernel and mkfs now use these definitions !
@@ -30,6 +32,22 @@ pub const T_DIR: u16 = 1; // directory
 pub const T_FILE: u16 = 2; // file
 #[allow(dead_code)]
 pub const T_DEV: u16 = 3; // device
+
+#[inline]
+pub fn name_to_dirsiz(name: &str) -> [u8; DIRSIZ] {
+    let mut out = [0u8; DIRSIZ];
+    let bytes = name.as_bytes();
+    let n = min(bytes.len(), DIRSIZ);
+    out[..n].copy_from_slice(&bytes[..n]);
+    out
+}
+
+#[allow(dead_code)]
+#[inline]
+pub fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
+    let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
+    str::from_utf8(&name[..len]).unwrap_or("")
+}
 
 #[allow(dead_code)]
 #[inline]
@@ -105,7 +123,7 @@ impl Default for Dinode {
 #[derive(Clone, Copy)]
 pub struct Dirent {
     pub inum: u16,
-    pub name: [u8; DIRSIZ],
+    name: [u8; DIRSIZ],
 }
 
 impl Dirent {
@@ -114,6 +132,30 @@ impl Dirent {
             inum: 0,
             name: [0; DIRSIZ],
         }
+    }
+
+    #[allow(dead_code)]
+    pub const fn from_raw_name(inum: u16, name: [u8; DIRSIZ]) -> Self {
+        Self { inum, name }
+    }
+
+    pub fn set_name(&mut self, name: &str) {
+        self.name = name_to_dirsiz(name);
+    }
+
+    #[allow(dead_code)]
+    pub fn name_str(&self) -> &str {
+        dirsiz_to_str(&self.name)
+    }
+
+    #[allow(dead_code)]
+    pub fn name_eq(&self, name: &str) -> bool {
+        self.name == name_to_dirsiz(name)
+    }
+
+    #[allow(dead_code)]
+    pub fn raw_name(&self) -> &[u8; DIRSIZ] {
+        &self.name
     }
 }
 

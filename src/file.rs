@@ -1,9 +1,8 @@
-use core::str;
-
 use crate::buf::BSIZE;
-use crate::constants::{T_DIR, T_FILE, DIRSIZ, DIRENT_SIZE};
+use crate::constants::{T_DIR, T_FILE};
 use crate::fcntl::{O_CREATE, O_RDONLY, O_RDWR, O_WRONLY};
 use crate::fs;
+use crate::fs::DIRENT_SIZE;
 use crate::param::{MAXOPBLOCKS, NFILE};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -48,11 +47,6 @@ impl FTable {
 }
 
 static mut FTABLE: FTable = FTable::new();
-
-fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
-    let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
-    str::from_utf8(&name[..len]).unwrap_or("")
-}
 
 pub fn fileinit() {
     unsafe {
@@ -235,23 +229,21 @@ pub fn isdirempty(dp_idx: usize) -> bool {
     true
 }
 
-pub fn unlink(path: &str, name: [u8; DIRSIZ]) -> i32 {
-    let dp = match fs::nameiparent(path, name) {
-        Some(idx) => idx,
+pub fn unlink(path: &str) -> i32 {
+    let (dp, name) = match fs::nameiparent(path) {
+        Some(x) => x,
         None => return -1,
     };
 
     fs::iread(dp);
 
-    let name_str = dirsiz_to_str(name);
-
-    if name_str == "." || name_str == ".." {
+    if name == "." || name == ".." {
         fs::iput(dp);
         return -1;
     }
 
     let mut off = 0u32;
-    let ip = match fs::dirlookup(dp, name_str, Some(&mut off)) {
+    let ip = match fs::dirlookup(dp, name, Some(&mut off)) {
         Some(idx) => idx,
         None => {
             fs::iput(dp);
@@ -290,14 +282,10 @@ pub fn unlink(path: &str, name: [u8; DIRSIZ]) -> i32 {
 }
 
 pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
-    let mut name = [0u8; DIRSIZ];
-
-    let dp = fs::nameiparent(path, &mut name)?;
+    let (dp, name) = fs::nameiparent(path)?;
     fs::iread(dp);
 
-    let name_str = dirsiz_to_str(&name);
-
-    if let Some(ip) = fs::dirlookup(dp, name_str, None) {
+    if let Some(ip) = fs::dirlookup(dp, name, None) {
         fs::iput(dp);
         fs::iread(ip);
         if (type_ as u16) == T_FILE && fs::inode_type(ip) == T_FILE {
@@ -322,7 +310,7 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
         }
     }
 
-    if fs::dirlink(dp, name_str, fs::inode_inum(ip)) < 0 {
+    if fs::dirlink(dp, name, fs::inode_inum(ip)) < 0 {
         panic!("create: dirlink");
     }
 

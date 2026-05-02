@@ -3,7 +3,6 @@
 #![allow(dead_code)]
 
 use core::panic::PanicInfo;
-use crate::constants::{DIRENT_SIZE, DIRSIZ};
 use crate::x86::cli;
 use crate::lapic::lapicid;
 
@@ -56,9 +55,7 @@ fn welcome() {
     file::fileclose(gtxt);
 
     // Delete /foo/hello.txt
-    let mut name: [u8; DIRSIZ] = [0; DIRSIZ];
-    name[..9].copy_from_slice(b"hello.txt");
-    if file::unlink("/foo/", name) < 0 {
+    if file::unlink("/foo/hello.txt") < 0 {
         panic!("failed to unlink /foo/hello.txt");
     }
 
