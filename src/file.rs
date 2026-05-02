@@ -214,7 +214,8 @@ pub fn isdirempty(dp_idx: usize) -> bool {
     fs::iread(dp_idx);
 
     let mut off = (2 * DIRENT_SIZE) as u32;
-    while off < fs::inode_size(dp_idx) {
+    // Review: Using the shared inode accessor directly  
+    while off < fs::inode(dp_idx).size {
         let mut raw = [0u8; DIRENT_SIZE];
         if fs::readi(dp_idx, &mut raw, off, DIRENT_SIZE as u32) != DIRENT_SIZE as i32 {
             panic!("isdirempty: readi");
@@ -253,11 +254,11 @@ pub fn unlink(path: &str) -> i32 {
 
     fs::iread(ip);
 
-    if fs::inode_nlink(ip) < 1 {
+    if fs::inode(ip).nlink < 1 {
         panic!("unlink: nlink < 1");
     }
 
-    if fs::inode_type(ip) == T_DIR && !isdirempty(ip) {
+    if (fs::inode(ip).type_ as u16) == T_DIR && !isdirempty(ip) {
         fs::iput(ip);
         fs::iput(dp);
         return -1;
@@ -268,13 +269,13 @@ pub fn unlink(path: &str) -> i32 {
         panic!("unlink: writei");
     }
 
-    if fs::inode_type(ip) == T_DIR {
-        fs::inode_dec_nlink(dp);
+    if (fs::inode(ip).type_ as u16) == T_DIR {
+        fs::inode_mut(dp).nlink -= 1;
         fs::iupdate(dp);
     }
     fs::iput(dp);
 
-    fs::inode_dec_nlink(ip);
+    fs::inode_mut(ip).nlink -= 1;
     fs::iupdate(ip);
     fs::iput(ip);
 
@@ -288,29 +289,34 @@ pub fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
     if let Some(ip) = fs::dirlookup(dp, name, None) {
         fs::iput(dp);
         fs::iread(ip);
-        if (type_ as u16) == T_FILE && fs::inode_type(ip) == T_FILE {
+        if (type_ as u16) == T_FILE && (fs::inode(ip).type_ as u16) == T_FILE {
             return Some(ip);
         }
         fs::iput(ip);
         return None;
     }
 
-    let ip = fs::ialloc(fs::inode_dev(dp), type_);
+    let ip = fs::ialloc(fs::inode(dp).dev, type_);
 
     fs::iread(ip);
-    fs::inode_set_meta(ip, major, minor, 1);
+    {
+        let inode = fs::inode_mut(ip);
+        inode.major = major;
+        inode.minor = minor;
+        inode.nlink = 1;
+    }
     fs::iupdate(ip);
 
     if (type_ as u16) == T_DIR {
-        fs::inode_inc_nlink(dp);
+        fs::inode_mut(dp).nlink += 1;
         fs::iupdate(dp);
 
-        if fs::dirlink(ip, ".", fs::inode_inum(ip)) < 0 || fs::dirlink(ip, "..", fs::inode_inum(dp)) < 0 {
+        if fs::dirlink(ip, ".", fs::inode(ip).inum) < 0 || fs::dirlink(ip, "..", fs::inode(dp).inum) < 0 {
             panic!("create dots");
         }
     }
 
-    if fs::dirlink(dp, name, fs::inode_inum(ip)) < 0 {
+    if fs::dirlink(dp, name, fs::inode(ip).inum) < 0 {
         panic!("create: dirlink");
     }
 
@@ -325,7 +331,7 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
     } else {
         let ip = fs::namei(path)?;
         fs::iread(ip);
-        if fs::inode_type(ip) == T_DIR && omode != O_RDONLY {
+        if (fs::inode(ip).type_ as u16) == T_DIR && omode != O_RDONLY {
             fs::iput(ip);
             return None;
         }

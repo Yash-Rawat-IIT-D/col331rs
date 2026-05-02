@@ -90,18 +90,13 @@ fn sb_mut() -> &'static mut Superblock {
 }
 
 #[inline]
-fn inode(idx: usize) -> &'static Inode {
-    if idx >= NINODE {
-        panic!("inode: bad inode index");
-    }
+pub(crate) fn inode(idx: usize) -> &'static Inode {
+    // Review : array indexing already enforces bounds checks so removed
     unsafe { &(*(&raw const ICACHE)).inode[idx] }
 }
 
 #[inline]
-fn inode_mut(idx: usize) -> &'static mut Inode {
-    if idx >= NINODE {
-        panic!("inode_mut: bad inode index");
-    }
+pub(crate) fn inode_mut(idx: usize) -> &'static mut Inode {
     unsafe { &mut (*(&raw mut ICACHE)).inode[idx] }
 }
 
@@ -590,41 +585,6 @@ pub fn writei(idx: usize, src: &[u8], off: u32, n: u32) -> i32 {
     }
 }
 
-pub fn inode_inum(idx: usize) -> u32 {
-    inode(idx).inum
-}
-
-pub fn inode_dev(idx: usize) -> u32 {
-    inode(idx).dev
-}
-
-pub fn inode_type(idx: usize) -> u16 {
-    inode(idx).type_ as u16
-}
-
-pub fn inode_nlink(idx: usize) -> u16 {
-    inode(idx).nlink as u16
-}
-
-pub fn inode_size(idx: usize) -> u32 {
-    inode(idx).size
-}
-
-pub fn inode_set_meta(idx: usize, major: i16, minor: i16, nlink: i16) {
-    let ip = inode_mut(idx);
-    ip.major = major;
-    ip.minor = minor;
-    ip.nlink = nlink;
-}
-
-pub fn inode_inc_nlink(idx: usize) {
-    inode_mut(idx).nlink += 1;
-}
-
-pub fn inode_dec_nlink(idx: usize) {
-    inode_mut(idx).nlink -= 1;
-}
-
 // Look for a directory entry in a directory.
 // If found, set *poff to byte offset of entry.
 pub fn dirlookup(dp_idx: usize, name: &str, mut poff: Option<&mut u32>) -> Option<usize> {
@@ -664,7 +624,7 @@ pub fn dirlink(dp_idx: usize, name: &str, inum: u32) -> i32 {
     }
 
     let mut off = 0u32;
-    while off < inode_size(dp_idx) {
+    while off < inode(dp_idx).size {
         let mut raw = [0u8; DIRENT_SIZE];
         if readi(dp_idx, &mut raw, off, DIRENT_SIZE as u32) != DIRENT_SIZE as i32 {
             panic!("dirlink read");
@@ -725,7 +685,7 @@ fn namex<'a>(path: &'a str, nameiparent: bool) -> Option<(usize, &'a str)> {
         path_idx = next_idx;
         iread(ip);
 
-        if inode_type(ip) != T_DIR {
+        if (inode(ip).type_ as u16) != T_DIR {
             iput(ip);
             return None;
         }

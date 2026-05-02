@@ -1,6 +1,5 @@
 use core::cmp::min;
 use core::mem::size_of;
-use core::str;
 
 // On-disk file system format.
 // Both the kernel and mkfs now use these definitions !
@@ -30,8 +29,6 @@ pub const LOGSIZE: u32 = 0; // max data blocks in on-disk log
 
 pub const T_DIR: u16 = 1; // directory
 pub const T_FILE: u16 = 2; // file
-#[allow(dead_code)]
-pub const T_DEV: u16 = 3; // device
 
 #[inline]
 pub fn name_to_dirsiz(name: &str) -> [u8; DIRSIZ] {
@@ -42,14 +39,6 @@ pub fn name_to_dirsiz(name: &str) -> [u8; DIRSIZ] {
     out
 }
 
-#[allow(dead_code)]
-#[inline]
-pub fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
-    let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
-    str::from_utf8(&name[..len]).unwrap_or("")
-}
-
-#[allow(dead_code)]
 #[inline]
 pub fn iblock(inum: u32, sb: &Superblock) -> u32 {
     inum / (IPB as u32) + sb.inodestart
@@ -134,7 +123,7 @@ impl Dirent {
         }
     }
 
-    #[allow(dead_code)]
+    // Review: keeping only the dirent helpers this branch actively uses.
     pub const fn from_raw_name(inum: u16, name: [u8; DIRSIZ]) -> Self {
         Self { inum, name }
     }
@@ -143,19 +132,8 @@ impl Dirent {
         self.name = name_to_dirsiz(name);
     }
 
-    #[allow(dead_code)]
-    pub fn name_str(&self) -> &str {
-        dirsiz_to_str(&self.name)
-    }
-
-    #[allow(dead_code)]
     pub fn name_eq(&self, name: &str) -> bool {
         self.name == name_to_dirsiz(name)
-    }
-
-    #[allow(dead_code)]
-    pub fn raw_name(&self) -> &[u8; DIRSIZ] {
-        &self.name
     }
 }
 
