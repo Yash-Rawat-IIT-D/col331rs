@@ -1,3 +1,4 @@
+use core::cell::RefCell;
 use core::mem::size_of;
 use core::sync::atomic::Ordering;
 
@@ -30,18 +31,18 @@ struct Log {
 }
 
 impl Log {
-    const fn new() -> Self {
+    const fn new(start: u32, size: u32, dev: u32) -> Self {
         Self {
-            start: 0,
-            size: 0,
+            start,
+            size,
             committing: false,
-            dev: 0,
+            dev,
             lh: LogHeader::new(),
         }
     }
 }
 
-static mut LOG: Log = Log::new();
+// static mut LOG: RefCell<Log> = RefCell::new(Log::new());
 
 #[inline]
 fn read_i32_le(data: &[u8], off: usize) -> i32 {
@@ -63,37 +64,33 @@ fn write_u32_le(data: &mut [u8], off: usize, val: u32) {
     data[off..off + 4].copy_from_slice(&val.to_le_bytes());
 }
 
-fn read_head() {
-    unsafe {
-        let buf = bio::bread(LOG.dev, LOG.start);
+impl Log {
+    fn read_head(self: &mut Self) {
+        let buf = bio::bread(self.dev, self.start);
         let data = &bio::buf_mut(buf).data;
-        LOG.lh.n = read_i32_le(data, 0);
-        for i in 0..(LOG.lh.n as usize) {
-            LOG.lh.block[i] = read_u32_le(data, 4 + i * 4);
+        self.lh.n = read_i32_le(data, 0);
+        for i in 0..(self.lh.n as usize) {
+            self.lh.block[i] = read_u32_le(data, 4 + i * 4);
         }
         bio::brelse(buf);
     }
-}
 
-fn write_head() {
-    unsafe {
-        let buf = bio::bread(LOG.dev, LOG.start);
+    fn write_head(self: &Self) {
+        let buf = bio::bread(self.dev, self.start);
         let data = &mut bio::buf_mut(buf).data;
         data.fill(0);
-        write_i32_le(data, 0, LOG.lh.n);
-        for i in 0..(LOG.lh.n as usize) {
-            write_u32_le(data, 4 + i * 4, LOG.lh.block[i]);
+        write_i32_le(data, 0, self.lh.n);
+        for i in 0..(self.lh.n as usize) {
+            write_u32_le(data, 4 + i * 4, self.lh.block[i]);
         }
         bio::bwrite(buf);
         bio::brelse(buf);
     }
-}
 
-fn install_trans() {
-    unsafe {
-        for tail in 0..(LOG.lh.n as usize) {
-            let lbuf = bio::bread(LOG.dev, LOG.start + tail as u32 + 1);
-            let dbuf = bio::bread(LOG.dev, LOG.lh.block[tail]);
+    fn install_trans(self: &Self) {
+        for tail in 0..(self.lh.n as usize) {
+            let lbuf = bio::bread(self.dev, self.start + tail as u32 + 1);
+            let dbuf = bio::bread(self.dev, self.lh.block[tail]);
             let src = bio::buf_mut(lbuf).data;
             bio::buf_mut(dbuf).data.copy_from_slice(&src);
             bio::bwrite(dbuf);
@@ -101,22 +98,18 @@ fn install_trans() {
             bio::brelse(dbuf);
         }
     }
-}
 
-fn recover_from_log() {
-    read_head();
-    install_trans();
-    unsafe {
-        LOG.lh.n = 0;
+    fn recover_from_log(self: &mut Self) {
+        self.read_head();
+        self.install_trans();
+        self.lh.n = 0;
+        self.write_head();
     }
-    write_head();
-}
 
-fn write_log() {
-    unsafe {
-        for tail in 0..(LOG.lh.n as usize) {
-            let to = bio::bread(LOG.dev, LOG.start + tail as u32 + 1);
-            let from = bio::bread(LOG.dev, LOG.lh.block[tail]);
+    fn write_log(self: &Self) {
+        for tail in 0..(self.lh.n as usize) {
+            let to = bio::bread(self.dev, self.start + tail as u32 + 1);
+            let from = bio::bread(self.dev, self.lh.block[tail]);
             let src = bio::buf_mut(from).data;
             bio::buf_mut(to).data.copy_from_slice(&src);
             bio::bwrite(to);
@@ -124,66 +117,62 @@ fn write_log() {
             bio::brelse(to);
         }
     }
-}
 
-fn commit() {
-    unsafe {
-        if LOG.committing {
+    fn commit(self: &mut Self) {
+        if self.committing {
             panic!("commit");
         }
-        LOG.committing = true;
-        if LOG.lh.n > 0 {
-            write_log();
-            write_head();
-            install_trans();
-            LOG.lh.n = 0;
-            write_head();
+        self.committing = true;
+        if self.lh.n > 0 {
+            self.write_log();
+            self.write_head();
+            self.install_trans();
+            self.lh.n = 0;
+            self.write_head();
         }
-        LOG.committing = false;
-    }
-}
-
-pub fn initlog(dev: u32) {
-    if size_of::<LogHeader>() >= BSIZE {
-        panic!("initlog: too big logheader");
+        self.committing = false;
     }
 
-    let mut sb = fs_h::Superblock::new();
-    fs::readsb(dev, &mut sb);
-    unsafe {
-        LOG.start = sb.logstart;
-        LOG.size = sb.nlog;
-        LOG.dev = dev;
+    pub fn initlog(dev: u32) -> Self {
+        if size_of::<LogHeader>() >= BSIZE {
+            panic!("initlog: too big logheader");
+        }
+
+        let mut sb = fs_h::Superblock::new();
+        fs::readsb(dev, &mut sb);
+        let mut log = Log::new(sb.logstart, sb.nlog, dev);
+        log.recover_from_log();
+        log
     }
-    recover_from_log();
-}
 
-pub fn begin_op() {}
-
-pub fn end_op() {
-    commit();
-}
-
-pub fn log_write(idx: usize) {
-    unsafe {
+    pub fn log_write(self: &mut Self, idx: usize) {
         let blockno = bio::buf_mut(idx).blockno;
-        if LOG.lh.n as usize >= LOGSIZE || LOG.lh.n as u32 >= LOG.size.saturating_sub(1) {
+        if self.lh.n as usize >= LOGSIZE || self.lh.n as u32 >= self.size.saturating_sub(1) {
             panic!("too big a transaction");
         }
 
         let mut i = 0usize;
-        while i < LOG.lh.n as usize {
-            if LOG.lh.block[i] == blockno {
+        while i < self.lh.n as usize {
+            if self.lh.block[i] == blockno {
                 break;
             }
             i += 1;
         }
 
-        LOG.lh.block[i] = blockno;
-        if i == LOG.lh.n as usize {
-            LOG.lh.n += 1;
+        self.lh.block[i] = blockno;
+        if i == self.lh.n as usize {
+            self.lh.n += 1;
         }
 
         bio::buf_mut(idx).flags.fetch_or(B_DIRTY, Ordering::AcqRel);
     }
 }
+
+
+pub fn begin_op(log: &mut Log) {}
+
+pub fn end_op(log: &mut Log) {
+    log.commit();
+}
+
+
