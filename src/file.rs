@@ -3,6 +3,7 @@ use crate::constants::{T_DIR, T_FILE};
 use crate::fcntl::{O_CREATE, O_RDONLY, O_RDWR, O_WRONLY};
 use crate::fs;
 use crate::fs::DIRENT_SIZE;
+use crate::log::{begin_op, end_op};
 use crate::param::{MAXOPBLOCKS, NFILE};
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -102,9 +103,9 @@ pub fn fileclose(f_idx: usize) {
     }
 
     if ff.type_ == FileType::Inode {
-        crate::log::begin_op();
+        begin_op();
         fs::iput(ff.ip);
-        crate::log::end_op();
+        end_op();
     }
 }
 
@@ -184,7 +185,7 @@ pub fn filewrite(f_idx: usize, src: &[u8], n: i32) -> i32 {
                 n1 = max;
             }
 
-            crate::log::begin_op();
+            begin_op();
             fs::iread(f.ip);
             let off = unsafe { FTABLE.file[f_idx].off };
             let r = fs::writei(f.ip, &src[i as usize..], off, n1 as u32);
@@ -193,7 +194,7 @@ pub fn filewrite(f_idx: usize, src: &[u8], n: i32) -> i32 {
                     FTABLE.file[f_idx].off += r as u32;
                 }
             }
-            crate::log::end_op();
+            end_op();
 
             if r < 0 {
                 break;
@@ -235,12 +236,12 @@ pub fn isdirempty(dp_idx: usize) -> bool {
 }
 
 pub fn unlink(path: &str) -> i32 {
-    crate::log::begin_op();
+    begin_op();
 
     let (dp, name) = match fs::nameiparent(path) {
         Some(x) => x,
         None => {
-            crate::log::end_op();
+            end_op();
             return -1;
         }
     };
@@ -249,7 +250,7 @@ pub fn unlink(path: &str) -> i32 {
 
     if name == "." || name == ".." {
         fs::iput(dp);
-        crate::log::end_op();
+        end_op();
         return -1;
     }
 
@@ -258,7 +259,7 @@ pub fn unlink(path: &str) -> i32 {
         Some(idx) => idx,
         None => {
             fs::iput(dp);
-            crate::log::end_op();
+            end_op();
             return -1;
         }
     };
@@ -272,7 +273,7 @@ pub fn unlink(path: &str) -> i32 {
     if (fs::inode(ip).type_ as u16) == T_DIR && !isdirempty(ip) {
         fs::iput(ip);
         fs::iput(dp);
-        crate::log::end_op();
+        end_op();
         return -1;
     }
 
@@ -291,7 +292,7 @@ pub fn unlink(path: &str) -> i32 {
     fs::iupdate(ip);
     fs::iput(ip);
 
-    crate::log::end_op();
+    end_op();
     0
 }
 
@@ -339,13 +340,13 @@ fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
 }
 
 pub fn open(path: &str, omode: i32) -> Option<usize> {
-    crate::log::begin_op();
+    begin_op();
     
     let ip = if (omode & O_CREATE) != 0 {
         let ip = match create(path, T_FILE as i16, 0, 0) {
             Some(ip) => ip,
             None => {
-                crate::log::end_op();
+                end_op();
                 return None;
             }
         };
@@ -354,14 +355,14 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
         let ip = match fs::namei(path) {
             Some(ip) => ip,
             None => {
-                crate::log::end_op();
+                end_op();
                 return None;
             }
         };
         fs::iread(ip);
         if (fs::inode(ip).type_ as u16) == T_DIR && omode != O_RDONLY {
             fs::iput(ip);
-            crate::log::end_op();
+            end_op();
             return None;
         }
         ip
@@ -371,7 +372,7 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
         Some(idx) => idx,
         None => {
             fs::iput(ip);
-            crate::log::end_op();
+            end_op();
             return None;
         }
     };
@@ -385,22 +386,22 @@ pub fn open(path: &str, omode: i32) -> Option<usize> {
         f.writable = (omode & O_WRONLY) != 0 || (omode & O_RDWR) != 0;
     }
 
-    crate::log::end_op();
+    end_op();
     Some(f_idx)
 }
 
 pub fn mkdir(path: &str) -> i32 {
-    crate::log::begin_op();
+    begin_op();
     
     let ip = match create(path, T_DIR as i16, 0, 0) {
         Some(ip) => ip,
         None => {
-            crate::log::end_op();
+            end_op();
             return -1;
         }
     };
     
     fs::iput(ip);
-    crate::log::end_op();
+    end_op();
     0
 }
