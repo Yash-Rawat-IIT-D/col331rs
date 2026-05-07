@@ -16,7 +16,8 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
-mod constants;  
+mod fs_h;
+mod constants;  // Internal use only - no external crates
 mod buf;
 mod bio;
 mod ide;
@@ -26,30 +27,11 @@ mod file;
 mod log;
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
-        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
-    }
-}
-
-fn print_cstr(bytes: &[u8]) {
-    for &ch in bytes {
-        if ch == 0 {
-            break;
-        }
-        console::consputc(ch as i32);
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
@@ -106,15 +88,9 @@ pub extern "C" fn entryofrust() -> ! {
     }
 }
 
-static mut PANICKED: bool = false;
-
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    // Disable interrupts to prevent interrupt handlers from interfering
-    cli();
-    // Print panic message with LAPIC ID to identify which CPU panicked
-    println!("lapicid {}:\n{:#?}", lapicid(), info);
-    unsafe { PANICKED = true; }
-    // Halt the system
-    loop {}
+    println!("Kernel Panic: {:?}", info);
+    halt()
 }
