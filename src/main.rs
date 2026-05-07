@@ -25,6 +25,8 @@ mod fs;
 mod fcntl;
 mod file;
 mod log;
+mod mmu;
+mod vm;
 use crate::traps::*;
 
 fn halt() -> ! {
@@ -81,6 +83,7 @@ pub extern "C" fn entryofrust() -> ! {
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
+    vm::seginit();       // segment descriptors
     welcome();
 
     loop {

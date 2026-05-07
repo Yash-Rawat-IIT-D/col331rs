@@ -12,6 +12,19 @@ pub const SEG_UCODE: u16 = 3; // user code
 pub const SEG_UDATA: u16 = 4; // user data+stack
 pub const SEG_TSS: u16 = 5;   // this process's task state
 
+// cpu->gdt[NSEGS] holds the above segments.
+pub const NSEGS: usize = 6;
+
+// Application segment type bits
+pub const STA_X: u8 = 0x8;     // Executable segment
+pub const STA_W: u8 = 0x2;     // Writeable (non-executable segments)
+pub const STA_R: u8 = 0x2;     // Readable (executable segments)
+
+// Memory layout
+// We assume that kernel.asm can fit in first 2MB
+pub const STARTPROC: u32 = 0x200000;  // Start allocating process from here (2MB)
+pub const PROCSIZE: u32 = 0x100000;   // Size of each process (1MB)
+
 // System segment type bits
 pub const STS_T32A: u8 = 0x9; // Available 32-bit TSS
 pub const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
