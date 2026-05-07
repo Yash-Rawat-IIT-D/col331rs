@@ -1,15 +1,35 @@
 use crate::buf::BSIZE;
-use crate::constants::{T_DIR, T_FILE};
+use crate::constants::{T_DIR, T_FILE, T_DEV};
 use crate::fcntl::{O_CREATE, O_RDONLY, O_RDWR, O_WRONLY};
 use crate::fs;
 use crate::fs::DIRENT_SIZE;
 use crate::log::{begin_op, end_op};
-use crate::param::{MAXOPBLOCKS, NFILE};
+use crate::log;
+use crate::param::{MAXOPBLOCKS, NFILE, NDEV};
+
+// Device switch table entry
+#[derive(Copy, Clone)]
+pub struct Devsw {
+    pub read: Option<fn(usize, &mut [u8], i32) -> i32>,
+    pub write: Option<fn(usize, &[u8], i32) -> i32>,
+}
+
+impl Devsw {
+    pub const fn new() -> Self {
+        Self {
+            read: None,
+            write: None,
+        }
+    }
+}
+
+pub static mut DEVSW: [Devsw; NDEV] = [const { Devsw::new() }; NDEV];
 
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum FileType {
     None,
     Inode,
+    Device,
 }
 
 #[derive(Copy, Clone)]
@@ -394,6 +414,22 @@ pub fn mkdir(path: &str) -> i32 {
     begin_op();
     
     let ip = match create(path, T_DIR as i16, 0, 0) {
+        Some(ip) => ip,
+        None => {
+            log::end_op();
+            return -1;
+        }
+    };
+    
+    fs::iput(ip);
+    log::end_op();
+    0
+}
+
+pub fn mknod(path: &str, major: i16, minor: i16) -> i32 {
+    begin_op();
+    
+    let ip = match create(path, T_DEV as i16, major, minor) {
         Some(ip) => ip,
         None => {
             end_op();

@@ -111,7 +111,7 @@ pub const MASKED: u32 = 0x00010000;   // Interrupt masked
 
 pub use crate::fs_h::{
     BPB, BSIZE, DINODE_SIZE, DIRSIZ, FSSIZE, IPB, LOGSIZE, MAXFILE, NDIRECT, NINDIRECT, NINODES,
-    ROOTINO, T_DIR, T_FILE,
+    ROOTINO, T_DIR, T_FILE, T_DEV,
 };
 
 // ------------------------------------------------------ SYSTEM PARAMETERS (param.h) ----------------------------------------------

@@ -29,6 +29,7 @@ pub const LOGSIZE: u32 = 30; // max data blocks in on-disk log
 
 pub const T_DIR: u16 = 1; // directory
 pub const T_FILE: u16 = 2; // file
+pub const T_DEV: u16 = 3; // device
 
 #[inline]
 pub fn name_to_dirsiz(name: &str) -> [u8; DIRSIZ] {

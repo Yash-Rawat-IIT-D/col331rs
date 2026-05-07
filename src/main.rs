@@ -36,50 +36,29 @@ fn halt() -> ! {
 }
 
 fn welcome() {
-    // Create and write /foo/hello.txt
-    file::mkdir("/foo");
+    // Use println! to verify we reach this point (goes via Console::Write, not file)
+   
+    let c = match file::open("/console", fcntl::O_RDWR) {
+        Some(fd) => {
+            fd
+        }
+        None => {
+            panic!("Failed to open console");
+        }
+    };
+
+    let enter_message = b"\nEnter your name: ";
+    file::filewrite(c, enter_message, enter_message.len() as i32);
     
-    let gtxt = file::open("/foo/hello.txt", fcntl::O_CREATE | fcntl::O_WRONLY)
-        .unwrap_or_else(|| panic!("Failed to create /foo/hello.txt"));
-    let n = file::filewrite(gtxt, b"hello\0", 6);
-    println!("Wrote {} characters to /foo/hello.txt", n);
-    file::fileclose(gtxt);
-
-    // Read /foo/hello.txt
-    let gtxt = file::open("/foo/hello.txt", fcntl::O_RDONLY)
-        .unwrap_or_else(|| panic!("Unable to open /foo/hello.txt"));
-    let mut welcome = [0u8; 512];
-    let n = file::fileread(gtxt, &mut welcome, 6);
-    println!("Read {} chars from /foo/hello.txt: ", n);
-    println!("{}\n", core::str::from_utf8(&welcome).unwrap_or("?"));
-    file::fileclose(gtxt);
-
-    // Delete /foo/hello.txt
-    if file::unlink("/foo/hello.txt") < 0 {
-        panic!("failed to unlink /foo/hello.txt");
-    }
-
-    // Check that /foo is empty
-    let foo = fs::namei("/foo").unwrap_or_else(|| panic!("unable to open /foo"));
-    if !file::isdirempty(foo) {
-        panic!("/foo should be empty");
-    }
-    fs::iput(foo);
-
-    // Check that we cannot read file /foo/hello.txt
-    if let Some(f) = file::open("/foo/hello.txt", fcntl::O_RDONLY) {
-        file::fileclose(f);
-        panic!("could open /foo/hello.txt after unlinking");
-    }
-
-    // Write to /welcome.txt
-    let wtxt =
-        file::open("/welcome.txt", fcntl::O_RDONLY).unwrap_or_else(|| panic!("unable to open /welcome.txt"));
-    let welcome_cap = welcome.len() as i32;
-    let n = file::fileread(wtxt, &mut welcome, welcome_cap);
-    println!("Read {} chars from /welcome.txt:", n);
-    println!("{}\n", core::str::from_utf8(&welcome).unwrap_or("?"));
-    file::fileclose(wtxt);
+    let mut name = [0u8; 20];
+    let nice_message = b"Nice to meet you! ";
+    let bye_message = b"BYE!\n";
+    let namelen = file::fileread(c, &mut name, 20);
+    file::filewrite(c, nice_message, nice_message.len() as i32);
+    file::filewrite(c, &name[..namelen as usize], namelen);
+    file::filewrite(c, bye_message, bye_message.len() as i32); // Goodbye message is 5 bytes not 6 (Rust vs C string handling)
+    
+    file::fileclose(c);
 }
 
 extern "C" {
@@ -92,6 +71,7 @@ pub extern "C" fn entryofrust() -> ! {
     lapic::lapicinit();
     picirq::picinit();
     ioapic::ioapic_init();
+    console::consoleinit();
     uart::uartinit();
     ide::ideinit();
     tvinit();
@@ -100,6 +80,7 @@ pub extern "C" fn entryofrust() -> ! {
     x86::sti();
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
+    file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     welcome();
 
     loop {
