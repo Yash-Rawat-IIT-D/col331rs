@@ -1,5 +1,5 @@
 use core::sync::atomic::Ordering;
-use crate::constants::BSIZE;
+use crate::constants::{BSIZE, FSSIZE};
 use crate::buf::{B_DIRTY, B_VALID};
 use crate::x86;
 
@@ -14,10 +14,6 @@ const IDE_CMD_READ: u8 = 0x20;
 const IDE_CMD_WRITE: u8 = 0x30;
 const IDE_CMD_RDMUL: u8 = 0xC4;
 const IDE_CMD_WRMUL: u8 = 0xC5;
-
-// If you later build a real FS image, keep this consistent with your mkfs.
-// xv6 uses 1000.
-const FSSIZE: u32 = 1000;
 
 static mut IDEQUEUE: Option<usize> = None;
 static mut HAVEDISK1: bool = false;
