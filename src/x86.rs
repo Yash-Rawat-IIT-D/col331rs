@@ -81,6 +81,20 @@ pub fn lgdt(gdt: *const [SegDesc; NSEGS], size: usize) {
     }
 }
 
+pub fn ltr(sel: u16) {
+    unsafe {
+        asm!("ltr {0:x}", in(reg) sel, options(nomem, nostack));
+    }
+}
+
+pub fn readeflags() -> u32 {
+    unsafe {
+        let eflags: u32;
+        asm!("pushfd; pop eax", out("eax") eflags, options(nomem, nostack));
+        eflags
+    }
+}
+
 pub fn noop() {
     core::sync::atomic::compiler_fence(core::sync::atomic::Ordering::SeqCst);
 }

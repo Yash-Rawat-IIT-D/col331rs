@@ -1,10 +1,10 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE, STARTPROC, PROCSIZE};
 use crate::fs::namei;
-use crate::mmu::SegDesc;
+use crate::mmu::{SegDesc, TaskState};
 use crate::println;
+use crate::param::{KSTACKSIZE, NPROC};
 use crate::x86::{TrapFrame, sti};
-use crate::param::NPROC;
 use core::ptr::null_mut;
 // use core::cell::OnceCell;
 
@@ -80,7 +80,10 @@ static mut NEXTPID: i32 = 1;
 pub struct Cpu {
     pub apicid: u8,                   // Local APIC ID
     pub scheduler: *mut Context,      // swtch() here to enter scheduler
+    pub ts: TaskState,                // Used by x86 to find stack for interrupt
     pub gdt: [SegDesc; NSEGS],        // x86 global descriptor table
+    pub ncli: i32,                    // Depth of pushcli nesting.
+    pub intena: bool,                 // Were interrupts enabled before pushcli?
     pub proc: *mut Proc,              // The process running on this cpu or null
 }
 
@@ -89,7 +92,10 @@ impl Cpu {
         Self { 
             apicid: 0,
             scheduler: null_mut(),
+            ts: TaskState::new(),
             gdt: [SegDesc::new(); NSEGS],
+            ncli: 0,
+            intena: false,
             proc: null_mut(),
         }
     }
@@ -138,6 +144,7 @@ fn allocproc() -> Option<&'static mut Proc> {
                 
                 // Calculate stack pointer at the end of process memory
                 let sp = (STARTPROC + (PROCSIZE << 12)) as *mut u8;
+                p.kstack = sp.sub(KSTACKSIZE);
                 
                 // Leave room for trap frame
                 let sp = sp.sub(core::mem::size_of::<TrapFrame>());
@@ -164,7 +171,7 @@ pub fn pinit() {
     unsafe {
         extern "C" {
             static _binary_initcode_start: u8;
-            static _binary_initcode_size: usize;
+            static _binary_initcode_size: u8;
         }
         
         let p = allocproc().expect("Failed to allocate first process");
@@ -172,7 +179,7 @@ pub fn pinit() {
         // Copy initcode binary to STARTPROC
         let dst = STARTPROC as *mut u8;
         let src = &_binary_initcode_start as *const u8;
-        let size = &_binary_initcode_size as *const usize as usize;
+        let size = &_binary_initcode_size as *const u8 as usize;
         core::ptr::copy_nonoverlapping(src, dst, size);
         
         // Initialize trapframe
@@ -222,12 +229,32 @@ pub fn scheduler() -> ! {
                 // Switch to chosen process.
                 c.proc = p as *mut Proc;
                 p.state = ProcState::Running;
-                
+                crate::vm::switchuvm(c.proc);
                 swtch(p.context);
                 
                 // Process is done running for now.
                 c.proc = null_mut();
             }
+        }
+    }
+}
+
+pub fn procdump() {
+    unsafe {
+        let ptable = &raw mut PTABLE;
+        for p in &(*ptable).proc {
+            if p.state == ProcState::Unused {
+                continue;
+            }
+            let state = match p.state {
+                ProcState::Unused => "unused",
+                ProcState::Embryo => "embryo",
+                ProcState::Runnable => "runble",
+                ProcState::Running => "run   ",
+            };
+            let name_len = p.name.iter().position(|&b| b == 0).unwrap_or(p.name.len());
+            let name = core::str::from_utf8(&p.name[..name_len]).unwrap_or("???");
+            crate::println!("{} {} {}", p.pid, state, name);
         }
     }
 }
