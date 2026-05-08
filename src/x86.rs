@@ -139,6 +139,42 @@ pub fn rcr2() -> u32 {
     }
 }
 
+pub fn stosb(addr: *mut u8, data: u8, cnt: usize) {
+    unsafe {
+        asm!(
+            "cld",
+            "rep stosb",
+            inout("edi") addr => _,
+            inout("ecx") cnt => _,
+            in("al") data,
+            options(nostack)
+        );
+    }
+}
+
+pub fn stosl(addr: *mut u32, data: u32, cnt: usize) {
+    unsafe {
+        asm!(
+            "cld",
+            "rep stosl",
+            inout("edi") addr => _,
+            inout("ecx") cnt => _,
+            in("eax") data,
+            options(nostack)
+        );
+    }
+}
+
+pub fn loadgs(v: u16) {
+    unsafe {
+        asm!(
+            "mov gs, {0:x}",
+            in(reg) v,
+            options(nomem, nostack)
+        );
+    }
+}
+
 #[repr(C)]
 pub struct TrapFrame {
     // registers as pushed by pusha
@@ -151,6 +187,15 @@ pub struct TrapFrame {
     pub ecx: u32,
     pub eax: u32,
 
+    // segment registers
+    pub gs: u16,
+    pub padding1: u16,
+    pub fs: u16,
+    pub padding2: u16,
+    pub es: u16,
+    pub padding3: u16,
+    pub ds: u16,
+    pub padding4: u16,
     pub trapno: u32,
 
     // below here defined by x86 hardware

@@ -1,4 +1,4 @@
-use crate::constants::{SEG_KCODE, SEG_KDATA, SEG_UCODE, SEG_UDATA, STA_X, STA_W, STA_R, STARTPROC, PROCSIZE};
+use crate::constants::{SEG_KCODE, SEG_KDATA, SEG_UCODE, SEG_UDATA, STA_X, STA_W, STA_R, STARTPROC, PROCSIZE, DPL_USER};
 use crate::mmu::SegDesc;
 use crate::proc::cpuid;
 use crate::mp::MP_ONCE;
@@ -10,14 +10,17 @@ use core::mem::size_of_val;
 pub fn seginit() {
     unsafe {
         // Map "logical" addresses to virtual addresses using identity map.
+        // Cannot share a CODE descriptor for both kernel and user
+        // because it would have to have DPL_USR, but the CPU forbids
+        // an interrupt from CPL=0 to DPL=3.
         let cpus = MP_ONCE.cpus.get().expect("CPUs not initialized");
         let cpu_ptr = cpus.as_ptr() as *mut crate::proc::Cpu;
         let c = &mut *cpu_ptr.add(cpuid());
         
         c.gdt[SEG_KCODE as usize] = SegDesc::seg(STA_X | STA_R, 0, 0xffffffff, 0);
         c.gdt[SEG_KDATA as usize] = SegDesc::seg(STA_W, 0, 0xffffffff, 0);
-        c.gdt[SEG_UCODE as usize] = SegDesc::seg(STA_X | STA_R, STARTPROC, PROCSIZE, 0);
-        c.gdt[SEG_UDATA as usize] = SegDesc::seg(STA_W, STARTPROC, PROCSIZE, 0);
+        c.gdt[SEG_UCODE as usize] = SegDesc::seg(STA_X | STA_R, STARTPROC, PROCSIZE << 12, DPL_USER);
+        c.gdt[SEG_UDATA as usize] = SegDesc::seg(STA_W, STARTPROC, PROCSIZE << 12, DPL_USER);
         lgdt(&c.gdt, size_of_val(&c.gdt));
     }
 }

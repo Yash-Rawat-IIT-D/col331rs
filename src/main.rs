@@ -27,6 +27,7 @@ mod file;
 mod log;
 mod mmu;
 mod vm;
+mod spinlock;
 use crate::traps::*;
 
 fn halt() -> ! {
@@ -82,18 +83,42 @@ pub extern "C" fn entryofrust() -> ! {
     x86::sti();
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
+    // cli(); // disable interrupts
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     vm::seginit();       // segment descriptors
-    welcome();
-
-    loop {
-        x86::wfi();
-    }
+    proc::pinit();       // first process
+    proc::scheduler();   // start running processes (never returns)
 }
+
+static mut PANICKED: bool = false;
 
 #[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     println!("Kernel Panic: {:?}", info);
-    halt()
+    use core::fmt::Write;
+    
+    // Disable interrupts to prevent interrupt handlers from interfering
+    cli();
+    
+    // Print panic message with LAPIC ID to identify which CPU panicked
+    let mut console = console::Console {};
+    let _ = write!(&mut console, "lapicid {}: panic: ", lapicid());
+    let _ = writeln!(&mut console, "{}", info);
+    
+    // Print stack trace
+    let mut pcs = [0u32; 10];
+    let stack_ptr = &info as *const _ as *const u32;
+    spinlock::getcallerpcs(stack_ptr, &mut pcs);
+    
+    for &pc in &pcs {
+        if pc != 0 {
+            let _ = writeln!(&mut console, " {:#x}", pc);
+        }
+    }
+    
+    unsafe { PANICKED = true; }
+    
+    // Halt the system
+    halt();
 }
