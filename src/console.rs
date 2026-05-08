@@ -2,6 +2,7 @@ use crate::{uart::*};
 use core::fmt::*;
 use crate::file::DEVSW;
 use crate::param::CONSOLE;
+use crate::proc::procdump;
 
 pub struct Console {}
 
@@ -47,6 +48,7 @@ pub fn consoleintr(getc: fn() -> Option<u8>) {
                 x if x == ctrl('P') => {
                     // procdump() may indirectly use console output; call after loop
                     doprocdump = true;
+                    break;
                 }
                 x if x == ctrl('U') => {
                     while input.e != input.w && input.buf[(input.e - 1) % INPUT_BUF] != b'\n' {
@@ -77,7 +79,7 @@ pub fn consoleintr(getc: fn() -> Option<u8>) {
         }
     }
     if doprocdump {
-        crate::proc::procdump();
+        procdump();
     }
 }
 
