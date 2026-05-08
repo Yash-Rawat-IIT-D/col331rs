@@ -39,44 +39,15 @@ fn halt() -> ! {
         x86::outw(0xB002, 0x2000);
     }
 }
-
-fn welcome() {
-    // Use println! to verify we reach this point (goes via Console::Write, not file)
-   
-    let c = match file::open("/console", fcntl::O_RDWR) {
-        Some(fd) => {
-            fd
-        }
-        None => {
-            panic!("Failed to open console");
-        }
-    };
-
-    let enter_message = b"\nEnter your name: ";
-    file::filewrite(c, enter_message, enter_message.len() as i32);
-    
-    let mut name = [0u8; 20];
-    let nice_message = b"Nice to meet you! ";
-    let bye_message = b"BYE!\n";
-    let namelen = file::fileread(c, &mut name, 20);
-    file::filewrite(c, nice_message, nice_message.len() as i32);
-    file::filewrite(c, &name[..namelen as usize], namelen);
-    file::filewrite(c, bye_message, bye_message.len() as i32); // Goodbye message is 5 bytes not 6 (Rust vs C string handling)
-    
-    file::fileclose(c);
-}
-
 extern "C" {
     pub fn alltraps();
+    static end: u8;
 }
 
 #[no_mangle]
 pub extern "C" fn entryofrust() -> ! {
-    extern "C" {
-        static end: u8;
-    }
-
-    kalloc::kinit(unsafe { &end as *const u8 as *mut u8 }, PHYSTOP as *mut u8);
+    let kernel_end = unsafe { &end as *const u8 as *mut u8 };
+    kalloc::kinit(kernel_end, PHYSTOP as *mut u8);
     mp::mpinit();
     lapic::lapicinit();
     picirq::picinit();
