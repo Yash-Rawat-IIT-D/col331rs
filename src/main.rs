@@ -16,7 +16,8 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
-mod constants;  
+mod fs_h;
+mod constants;  // Internal use only - no external crates
 mod buf;
 mod bio;
 mod ide;
@@ -29,30 +30,11 @@ mod vm;
 mod spinlock;
 use crate::traps::*;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
-        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
-    }
-}
-
-fn print_cstr(bytes: &[u8]) {
-    for &ch in bytes {
-        if ch == 0 {
-            break;
-        }
-        console::consputc(ch as i32);
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
 
@@ -101,6 +83,7 @@ pub extern "C" fn entryofrust() -> ! {
     x86::sti();
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
+    // cli(); // disable interrupts
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     vm::seginit();       // segment descriptors
     proc::pinit();       // first process
@@ -109,8 +92,10 @@ pub extern "C" fn entryofrust() -> ! {
 
 static mut PANICKED: bool = false;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    println!("Kernel Panic: {:?}", info);
     use core::fmt::Write;
     
     // Disable interrupts to prevent interrupt handlers from interfering

@@ -6,8 +6,8 @@ autobins = false
 
 [lib]
 name = "kernel"
-path = "src/lib.rs"  # Use lib.rs instead of main.rs
-crate-type = ["staticlib"]  # Build a static library (.a)
+path = "src/main.rs"
+crate-type = ["staticlib"]
 
 [dependencies]
 modular-bitfield = "0.11.2"
