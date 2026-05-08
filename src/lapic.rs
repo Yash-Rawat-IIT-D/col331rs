@@ -1,6 +1,6 @@
 use core::ptr::{read_volatile, write_volatile};
 use crate::mp::MP_ONCE;
-use crate::constants::{IRQ_ERROR, IRQ_SPURIOUS, T_IRQ0};
+use crate::constants::{IRQ_ERROR, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0};
 
 const ID: isize = 0x0020 / 4;
 const VER: isize = 0x0030 / 4;
@@ -68,10 +68,9 @@ pub fn lapicinit() {
 	// from lapic[TICR] and then issues an interrupt.
 	// If xv6 cared more about precise timekeeping,
 	// TICR would be calibrated using an external time source.
-	// Timer disabled for p15 - will be re-enabled later
-	// lapicw(TDCR, X1);
-	// lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
-	// lapicw(TICR, 10000000);
+	lapicw(TDCR, X1);
+	lapicw(TIMER, PERIODIC | (T_IRQ0 + IRQ_TIMER));
+	lapicw(TICR, 10000000);
 
 
 	// Disable logical interrupt lines.
