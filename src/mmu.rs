@@ -58,7 +58,7 @@ impl SegDesc {
         seg.set_lim_19_16(((lim >> 16) & 0xf) as u8);
         seg.set_avl(0);
         seg.set_rsv1(0);
-        seg.set_db(0);
+        seg.set_db(1);
         seg.set_g(0);
         seg.set_base_31_24(((base >> 24) & 0xff) as u8);
         seg
