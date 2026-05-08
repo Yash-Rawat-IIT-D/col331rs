@@ -83,11 +83,13 @@ pub extern "C" fn entryofrust() -> ! {
     x86::sti();
     fs::iinit(param::ROOTDEV);
     log::initlog(param::ROOTDEV);
+    // cli(); // disable interrupts
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     vm::seginit();       // segment descriptors
     proc::pinit();       // first process
     proc::scheduler();   // start running processes (never returns)
 }
+
 static mut PANICKED: bool = false;
 
 #[cfg(not(test))]

@@ -1,7 +1,9 @@
 use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE, STARTPROC, PROCSIZE};
+use crate::fs::namei;
 use crate::mmu::SegDesc;
-use crate::x86::TrapFrame;
+use crate::println;
+use crate::x86::{TrapFrame, sti};
 use crate::param::NPROC;
 use core::ptr::null_mut;
 // use core::cell::OnceCell;
@@ -125,9 +127,6 @@ extern "C" {
 // Otherwise return None.
 fn allocproc() -> Option<&'static mut Proc> {
     unsafe {
-        
-
-        
         let ptable = &raw mut PTABLE;
         
         for p in &mut (*ptable).proc {
@@ -192,9 +191,8 @@ pub fn pinit() {
         for (i, &byte) in name.iter().enumerate() {
             p.name[i] = byte;
         }
-        
         // Set current working directory to root
-        p.cwd = crate::fs::namei("/").expect("Failed to find root directory");
+        p.cwd = namei("/").expect("Failed to find root directory");
         
         p.state = ProcState::Runnable;
     }
@@ -210,18 +208,17 @@ pub fn scheduler() -> ! {
     
     loop {
         // Enable interrupts on this processor.
-        crate::x86::sti();
+        sti();
         
         // Loop over process table looking for process to run.
         unsafe {
-         
-         let ptable = &raw mut PTABLE;
-            
+
+          let ptable = &raw mut PTABLE;
             for p in &mut (*ptable).proc {
                 if p.state != ProcState::Runnable {
                     continue;
                 }
-                
+
                 // Switch to chosen process.
                 c.proc = p as *mut Proc;
                 p.state = ProcState::Running;

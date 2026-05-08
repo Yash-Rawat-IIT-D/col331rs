@@ -10,6 +10,9 @@ use core::mem::size_of_val;
 pub fn seginit() {
     unsafe {
         // Map "logical" addresses to virtual addresses using identity map.
+        // Cannot share a CODE descriptor for both kernel and user
+        // because it would have to have DPL_USR, but the CPU forbids
+        // an interrupt from CPL=0 to DPL=3.
         let cpus = MP_ONCE.cpus.get().expect("CPUs not initialized");
         let cpu_ptr = cpus.as_ptr() as *mut crate::proc::Cpu;
         let c = &mut *cpu_ptr.add(cpuid());
