@@ -28,7 +28,9 @@ mod log;
 mod mmu;
 mod vm;
 mod spinlock;
+mod kalloc;
 use crate::traps::*;
+use crate::constants::PHYSTOP;
 
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
@@ -70,6 +72,11 @@ extern "C" {
 
 #[no_mangle]
 pub extern "C" fn entryofrust() -> ! {
+    extern "C" {
+        static end: u8;
+    }
+
+    kalloc::kinit(unsafe { &end as *const u8 as *mut u8 }, PHYSTOP as *mut u8);
     mp::mpinit();
     lapic::lapicinit();
     picirq::picinit();
@@ -86,6 +93,7 @@ pub extern "C" fn entryofrust() -> ! {
     file::mknod("/console", param::CONSOLE as i16, param::CONSOLE as i16);
     vm::seginit();       // segment descriptors
     proc::pinit();       // first process
+    proc::pinit();       // another process
     proc::scheduler();   // start running processes (never returns)
 }
 

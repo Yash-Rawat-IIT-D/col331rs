@@ -1,10 +1,11 @@
 use crate::mp::MP_ONCE;
-use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE, STARTPROC, PROCSIZE};
+use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::fs::namei;
 use crate::mmu::{SegDesc, TaskState};
 use crate::println;
 use crate::param::{KSTACKSIZE, NPROC};
 use crate::x86::{TrapFrame, sti};
+use crate::kalloc::kalloc;
 use core::ptr::null_mut;
 // use core::cell::OnceCell;
 
@@ -40,6 +41,7 @@ pub enum ProcState {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct Proc {
+    pub offset: *mut u8,              // Process memory base
     pub kstack: *mut u8,              // Bottom of kernel stack for this process (unused for now)
     pub state: ProcState,             // Process state
     pub pid: i32,                     // Process ID
@@ -53,6 +55,7 @@ pub struct Proc {
 impl Proc {
     pub const fn new() -> Self {
         Self {
+            offset: null_mut(),
             kstack: null_mut(),
             state: ProcState::Unused,
             pid: 0,
@@ -141,9 +144,15 @@ fn allocproc() -> Option<&'static mut Proc> {
                 p.state = ProcState::Embryo;
                 p.pid = NEXTPID;
                 NEXTPID += 1;
+
+                p.offset = kalloc();
+                if p.offset.is_null() {
+                    p.state = ProcState::Unused;
+                    return None;
+                }
                 
                 // Calculate stack pointer at the end of process memory
-                let sp = (STARTPROC + (PROCSIZE << 12)) as *mut u8;
+                let sp = p.offset.add(PGSIZE as usize);
                 p.kstack = sp.sub(KSTACKSIZE);
                 
                 // Leave room for trap frame
@@ -176,8 +185,8 @@ pub fn pinit() {
         
         let p = allocproc().expect("Failed to allocate first process");
         
-        // Copy initcode binary to STARTPROC
-        let dst = STARTPROC as *mut u8;
+        // Copy initcode binary to process memory
+        let dst = p.offset;
         let src = &_binary_initcode_start as *const u8;
         let size = &_binary_initcode_size as *const u8 as usize;
         core::ptr::copy_nonoverlapping(src, dst, size);
