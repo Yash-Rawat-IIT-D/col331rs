@@ -1,14 +1,18 @@
 use modular_bitfield::prelude::*;
 use core::cell::OnceCell;
 use core::sync::atomic::{AtomicU32, Ordering};
-use core::ptr::addr_of_mut;
+use crate::ide::ideintr;
 use crate::proc::{cpuid, myproc, ProcState};
 use crate::println;
 use crate::lapic::lapiceoi;
 use crate::x86::{lidt, rcr2, TrapFrame};
 use crate::lapic;
-use crate::constants::{IRQ_COM1, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0, SEG_KCODE, STS_IG32, STS_TG32};
+use crate::constants::{IRQ_COM1, IRQ_IDE, IRQ_SPURIOUS, IRQ_TIMER, T_IRQ0};
 use crate::uart::uartintr;
+
+const SEG_KCODE: u16 = 1;
+const STS_IG32: u8 = 0xE; // 32-bit Interrupt Gate
+const STS_TG32: u8 = 0xF; // 32-bit Trap Gate
 
 extern "C" {
     static vectors: [usize; 256]; // in vectors.S: array of 256 entry pointers
@@ -47,6 +51,7 @@ impl GateDesc {
 static mut IDT: OnceCell<[GateDesc; 256]> = OnceCell::new();
 pub static TICKS: AtomicU32 = AtomicU32::new(0);
 
+
 pub fn tvinit() {
     let mut arr = [GateDesc::default(); 256];
     for i in 0..256 {
@@ -58,12 +63,12 @@ pub fn tvinit() {
         );
     }
     unsafe {
-        let _ = (*addr_of_mut!(IDT)).set(arr);
+        let _ = IDT.set(arr);
     }
 }
 
 pub fn idtinit() {
-    let idt = unsafe { (*addr_of_mut!(IDT)).get().expect("IDT not initialized") };
+    let idt = unsafe { IDT.get().expect("IDT not initialized") };
     lidt(idt, core::mem::size_of::<[GateDesc; 256]>() as usize);
 }
 
@@ -80,6 +85,7 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
 	const TIMER: u32 = T_IRQ0 + IRQ_TIMER;
 	const SPURIOUS: u32 = T_IRQ0 + IRQ_SPURIOUS;
 	const SEVEN: u32 = T_IRQ0 + 7;
+    const IDE: u32 = T_IRQ0 + IRQ_IDE;
     match tf.trapno {
         TIMER => {
             TICKS.fetch_add(1, Ordering::Relaxed);
@@ -98,11 +104,10 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
             );
             lapiceoi();
 		}
-        crate::constants::IDE_TRAP => {
-            crate::ide::ideintr();
-            crate::lapic::lapiceoi();
+        IDE => {
+            ideintr();
+            lapiceoi();
         }
-
 		_ => {
             if myproc().is_none() || (tf.cs & 3) == 0 {
                 println!(
@@ -112,7 +117,7 @@ pub extern "C" fn trap(orig_tf: *mut TrapFrame) {
                     tf.eip,
                     rcr2()
                 );
-                panic!("trap happened");
+                panic!("trap");
             }
 		}
 	}

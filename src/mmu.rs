@@ -1,9 +1,9 @@
 #![allow(unused_parens)] // False positive from bitfield macro
 
 use modular_bitfield::prelude::*;
+use crate::constants::{PDXSHIFT, PTXSHIFT}; // Page table/directory helper functions
 
 // Segment Descriptor
-
 #[bitfield]
 #[repr(C, packed)]
 #[derive(Clone, Copy, Default, Debug)]
@@ -58,7 +58,7 @@ impl SegDesc {
         seg.set_lim_19_16(((lim >> 16) & 0xf) as u8);
         seg.set_avl(0);
         seg.set_rsv1(0);
-        seg.set_db(0);
+        seg.set_db(1);
         seg.set_g(0);
         seg.set_base_31_24(((base >> 24) & 0xff) as u8);
         seg
@@ -149,4 +149,34 @@ impl TaskState {
             iomb: 0,
         }
     }
+}
+
+// Extract page directory index from virtual address
+#[inline]
+pub fn pdx(va: u32) -> usize {
+    ((va >> PDXSHIFT) & 0x3FF) as usize
+}
+
+// Extract page table index from virtual address
+#[inline]
+pub fn ptx(va: u32) -> usize {
+    ((va >> PTXSHIFT) & 0x3FF) as usize
+}
+
+// Construct virtual address from page directory index, page table index, and offset
+#[inline]
+pub fn pgaddr(d: u32, t: u32, o: u32) -> u32 {
+    (d << PDXSHIFT) | (t << PTXSHIFT) | o
+}
+
+// Extract address from page table entry
+#[inline]
+pub fn pte_addr(pte: u32) -> u32 {
+    pte & !0xFFF
+}
+
+// Extract flags from page table entry
+#[inline]
+pub fn pte_flags(pte: u32) -> u32 {
+    pte & 0xFFF
 }

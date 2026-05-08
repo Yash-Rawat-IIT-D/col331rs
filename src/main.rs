@@ -16,7 +16,8 @@ mod picirq;
 mod mp;
 mod proc;
 mod traps;
-mod constants;  
+mod fs_h;
+mod constants;  // Internal use only - no external crates
 mod buf;
 mod bio;
 mod ide;
@@ -31,70 +32,22 @@ mod kalloc;
 use crate::traps::*;
 use crate::constants::PHYSTOP;
 
-#[macro_export]
-macro_rules! println {
-    ($($arg:tt)*) => ({
-        use core::fmt::Write;
-        use crate::console::*;
-        let mut console = Console {};
-        let _ = writeln!(&mut console, $($arg)*);
-    });
-}
-
 fn halt() -> ! {
     println!("Bye COL{}\n\0", 331);
     loop {
-        x86::outw(0x604, 0x2000);  // QEMU isa-debug-exit device
-        x86::outw(0xB004, 0x2000); // VirtualBox shutdown port
+        x86::outw(0x602, 0x2000);
+        x86::outw(0xB002, 0x2000);
     }
 }
-
-fn print_cstr(bytes: &[u8]) {
-    for &ch in bytes {
-        if ch == 0 {
-            break;
-        }
-        console::consputc(ch as i32);
-    }
-}
-
-fn welcome() {
-    // Use println! to verify we reach this point (goes via Console::Write, not file)
-   
-    let c = match file::open("/console", fcntl::O_RDWR) {
-        Some(fd) => {
-            fd
-        }
-        None => {
-            panic!("Failed to open console");
-        }
-    };
-
-    let enter_message = b"\nEnter your name: ";
-    file::filewrite(c, enter_message, enter_message.len() as i32);
-    
-    let mut name = [0u8; 20];
-    let nice_message = b"Nice to meet you! ";
-    let bye_message = b"BYE!\n";
-    let namelen = file::fileread(c, &mut name, 20);
-    file::filewrite(c, nice_message, nice_message.len() as i32);
-    file::filewrite(c, &name[..namelen as usize], namelen);
-    file::filewrite(c, bye_message, bye_message.len() as i32); // Goodbye message is 5 bytes not 6 (Rust vs C string handling)
-    
-    file::fileclose(c);
-}
-
 extern "C" {
     pub fn alltraps();
+    static end: u8;
 }
 
 #[no_mangle]
 pub extern "C" fn entryofrust() -> ! {
-    extern "C" {
-        static end: u8;
-    }
-
-    kalloc::kinit(unsafe { &end as *const u8 as *mut u8 }, PHYSTOP as *mut u8);
+    let kernel_end = unsafe { &end as *const u8 as *mut u8 };
+    kalloc::kinit(kernel_end, PHYSTOP as *mut u8);
     mp::mpinit();
     lapic::lapicinit();
     picirq::picinit();
@@ -117,8 +70,10 @@ pub extern "C" fn entryofrust() -> ! {
 
 static mut PANICKED: bool = false;
 
+#[cfg(not(test))]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
+    println!("Kernel Panic: {:?}", info);
     use core::fmt::Write;
     
     // Disable interrupts to prevent interrupt handlers from interfering
