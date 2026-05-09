@@ -2,7 +2,6 @@ use crate::mp::MP_ONCE;
 use crate::constants::{NSEGS, SEG_UCODE, SEG_UDATA, DPL_USER, FL_IF, PGSIZE};
 use crate::fs::namei;
 use crate::mmu::{SegDesc, TaskState};
-use crate::debug;
 use crate::println;
 use crate::param::{KSTACKSIZE, NPROC, NOFILE};
 use crate::x86::{TrapFrame, sti};

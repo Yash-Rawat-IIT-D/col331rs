@@ -1,6 +1,6 @@
 use core::str;
 
-use crate::constants::{DIRSIZ, T_DIR, T_FILE};
+use crate::constants::{T_DIR, T_FILE};
 use crate::fcntl::{O_CREATE, O_RDONLY};
 use crate::file;
 use crate::fs;
@@ -8,11 +8,6 @@ use crate::log;
 use crate::param::NOFILE;
 use crate::proc::myproc;
 use crate::syscall::{argint, argptr, argstr};
-
-fn dirsiz_to_str(name: &[u8; DIRSIZ]) -> &str {
-    let len = name.iter().position(|&b| b == 0).unwrap_or(DIRSIZ);
-    str::from_utf8(&name[..len]).unwrap_or("")
-}
 
 fn argfd(n: i32, pfd: Option<&mut i32>, pf: Option<&mut usize>) -> i32 {
     let mut fd = 0;
@@ -139,7 +134,7 @@ pub fn sys_open() -> i32 {
             }
         };
         fs::iread(ip);
-        if fs::inode_type(ip) == T_DIR && omode != O_RDONLY {
+        if fs::inode(ip).type_ as u16 == T_DIR && omode != O_RDONLY {
             fs::iput(ip);
             log::end_op();
             return -1;
@@ -171,37 +166,39 @@ pub fn sys_open() -> i32 {
 }
 
 fn create(path: &str, type_: i16, major: i16, minor: i16) -> Option<usize> {
-    let mut name = [0u8; DIRSIZ];
-
-    let dp = fs::nameiparent(path, &mut name)?;
+    let (dp, name) = fs::nameiparent(path)?;
     fs::iread(dp);
 
-    let name_str = dirsiz_to_str(&name);
-    if let Some(ip) = fs::dirlookup(dp, name_str, None) {
+    if let Some(ip) = fs::dirlookup(dp, name, None) {
         fs::iput(dp);
         fs::iread(ip);
-        if (type_ as u16) == T_FILE && fs::inode_type(ip) == T_FILE {
+        if (type_ as u16) == T_FILE && fs::inode(ip).type_ as u16 == T_FILE {
             return Some(ip);
         }
         fs::iput(ip);
         return None;
     }
 
-    let ip = fs::ialloc(fs::inode_dev(dp), type_);
+    let ip = fs::ialloc(fs::inode(dp).dev, type_);
 
     fs::iread(ip);
-    fs::inode_set_meta(ip, major, minor, 1);
+    {
+        let inode = fs::inode_mut(ip);
+        inode.major = major;
+        inode.minor = minor;
+        inode.nlink = 1;
+    }
     fs::iupdate(ip);
 
     if (type_ as u16) == T_DIR {
-        fs::inode_inc_nlink(dp);
+        fs::inode_mut(dp).nlink += 1;
         fs::iupdate(dp);
-        if fs::dirlink(ip, ".", fs::inode_inum(ip)) < 0 || fs::dirlink(ip, "..", fs::inode_inum(dp)) < 0 {
+        if fs::dirlink(ip, ".", fs::inode(ip).inum) < 0 || fs::dirlink(ip, "..", fs::inode(dp).inum) < 0 {
             panic!("create dots");
         }
     }
 
-    if fs::dirlink(dp, name_str, fs::inode_inum(ip)) < 0 {
+    if fs::dirlink(dp, name, fs::inode(ip).inum) < 0 {
         panic!("create: dirlink");
     }
 
