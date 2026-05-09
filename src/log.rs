@@ -1,7 +1,7 @@
 use core::mem::size_of;
 use core::sync::atomic::Ordering;
 
-use crate::bio;
+use crate::{bio, fs_h};
 use crate::buf::{B_DIRTY, BSIZE};
 use crate::fs;
 use crate::param::LOGSIZE;
@@ -148,7 +148,7 @@ pub fn initlog(dev: u32) {
         panic!("initlog: too big logheader");
     }
 
-    let mut sb = fs::Superblock::new();
+    let mut sb = fs_h::Superblock::new();
     fs::readsb(dev, &mut sb);
     unsafe {
         LOG.start = sb.logstart;

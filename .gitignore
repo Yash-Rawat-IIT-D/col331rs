@@ -16,7 +16,6 @@ kernelmemfs
 mkfs
 .gdbinit
 .vscode
-new_features
 
 ## Rust specific
 target/

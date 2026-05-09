@@ -224,36 +224,3 @@ pub struct TrapFrame {
     pub ss: u16,
     pub padding6: u16,
 }
-
-// Page table/directory helper functions
-use crate::constants::{PDXSHIFT, PTXSHIFT};
-
-// Extract page directory index from virtual address
-#[inline]
-pub fn pdx(va: u32) -> usize {
-    ((va >> PDXSHIFT) & 0x3FF) as usize
-}
-
-// Extract page table index from virtual address
-#[inline]
-pub fn ptx(va: u32) -> usize {
-    ((va >> PTXSHIFT) & 0x3FF) as usize
-}
-
-// Construct virtual address from page directory index, page table index, and offset
-#[inline]
-pub fn pgaddr(d: u32, t: u32, o: u32) -> u32 {
-    (d << PDXSHIFT) | (t << PTXSHIFT) | o
-}
-
-// Extract address from page table entry
-#[inline]
-pub fn pte_addr(pte: u32) -> u32 {
-    pte & !0xFFF
-}
-
-// Extract flags from page table entry
-#[inline]
-pub fn pte_flags(pte: u32) -> u32 {
-    pte & 0xFFF
-}
