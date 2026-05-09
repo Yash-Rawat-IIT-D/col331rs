@@ -147,7 +147,6 @@ fn allocproc() -> Option<&'static mut Proc> {
         for p in &mut (*ptable).proc {
             if p.state == ProcState::Unused {
                 // Found an unused process
-                // debug!("allocproc: found unused process with pid {}", p.pid);
                 p.state = ProcState::Embryo;
                 p.pid = NEXTPID;
                 NEXTPID += 1;
@@ -174,7 +173,6 @@ fn allocproc() -> Option<&'static mut Proc> {
                 // Initialize context
                 core::ptr::write_bytes(p.context, 0, 1);
                 (*p.context).eip = trapret as *const () as usize as u32;
-                // debug!("allocproc: initialized process with pid {}", p.pid);
                 return Some(p);
             }
         }
@@ -190,9 +188,7 @@ pub fn pinit() {
             static _binary_initcode_start: u8;
             static _binary_initcode_size: u8;
         }
-        // debug!("Initializing first user process");
         let p = allocproc().expect("Failed to allocate first process");
-        // debug!("Returned from allocproc with pid {}", p.pid);
         println!("Allocated process at offset {:p} with pid {}", p.offset, p.pid);
         // Copy initcode binary to process memory
         let dst = p.offset;
